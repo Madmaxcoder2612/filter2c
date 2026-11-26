@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filter2c"
+version = "0.1.0"
+description = "Design digital filters with SciPy and generate verified, dependency-free C code for microcontrollers."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Abhishek Vijay Potekar" }]
+keywords = ["dsp", "filter", "butterworth", "biquad", "embedded", "code generation", "microcontroller"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Code Generators",
+]
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/Madmaxcoder2612/filter2c"
+Issues = "https://github.com/Madmaxcoder2612/filter2c/issues"
+
+[project.scripts]
+filter2c = "filter2c.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+filter2c = ["runtime/filter2c.h"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
