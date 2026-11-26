@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
 
 ## Unreleased
 
+- Notch filter (`filter2c notch`, `filter2c.notch`) for removing a single frequency such as 50 Hz mains hum.
+- Verification for notch filters: attenuation of a pure tone at the notch frequency, measured on the compiled C code.
+- Example `HumNotch50Hz`, tried live on an ESP32-S3: the 50 Hz component drops by about 36 dB (read from a screenshot, approximate); the 100 and 150 Hz harmonics stay.
+- `target-sketch` now takes the filter type: `target-sketch butter-lowpass ...` or `target-sketch notch ...`. The notch self-test signal contains a tone at the notch frequency.
+
 - `filter2c target-sketch`: writes an ESP32 sketch that runs the filter on the board and prints the result and the time per sample.
 - `filter2c check-board-log`: compares the board's printed output with SciPy and with the PC build.
 - Example `ESP32SelfTest`.

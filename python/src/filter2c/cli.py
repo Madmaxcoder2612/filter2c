@@ -1,4 +1,10 @@
-"""Command line interface: ``filter2c butter-lowpass ...`` and the board self-test commands."""
+"""Command line interface.
+
+filter2c butter-lowpass ...        write C code for a Butterworth low-pass filter
+filter2c notch ...                 write C code for a notch filter
+filter2c target-sketch <filter>    write an ESP32 self-test sketch
+filter2c check-board-log ...       check what the board printed
+"""
 from __future__ import annotations
 
 import argparse
@@ -7,13 +13,15 @@ from pathlib import Path
 
 from . import __version__
 from .codegen import check_name, generate_header, runtime_header
-from .design import butterworth_lowpass
+from .design import FilterDesign, butterworth_lowpass, notch
 from .target import check_board_log, create_sketch
 from .verify import (
+    DEFAULT_MIN_ATTENUATION_DB,
     DEFAULT_TOLERANCE,
     VerificationError,
     check_stability,
     compare_with_scipy,
+    measure_attenuation,
 )
 
 _FLOAT_HINT = (
@@ -24,11 +32,20 @@ _FLOAT_HINT = (
 )
 
 
-def _add_design_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_lowpass_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--order", type=int, required=True, help="filter order (1 to 16)")
     parser.add_argument("--cutoff", type=float, required=True, help="-3 dB frequency in Hz")
     parser.add_argument("--fs", type=float, required=True, help="sampling rate in Hz")
     parser.add_argument("--name", default="filter", help="C name of the filter (default: filter)")
+    parser.set_defaults(filter="butter-lowpass")
+
+
+def _add_notch_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--freq", type=float, required=True, help="frequency to remove, in Hz")
+    parser.add_argument("--q", type=float, required=True, help="quality factor, 0.5 to 100")
+    parser.add_argument("--fs", type=float, required=True, help="sampling rate in Hz")
+    parser.add_argument("--name", default="filter", help="C name of the filter (default: filter)")
+    parser.set_defaults(filter="notch")
 
 
 def _add_tolerance_argument(parser: argparse.ArgumentParser) -> None:
@@ -36,6 +53,19 @@ def _add_tolerance_argument(parser: argparse.ArgumentParser) -> None:
         "--tolerance", type=float, default=DEFAULT_TOLERANCE,
         help=f"allowed error as a fraction of the output peak (default: {DEFAULT_TOLERANCE:g})",
     )
+
+
+def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-o", "--output", type=Path, required=True, help="header file to write")
+    parser.add_argument(
+        "--write-runtime", action="store_true",
+        help="also write filter2c.h next to the output file",
+    )
+    parser.add_argument(
+        "--verify", action="store_true",
+        help="compile the result and compare it with SciPy (needs a C compiler)",
+    )
+    _add_tolerance_argument(parser)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,27 +77,33 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     low = sub.add_parser("butter-lowpass", help="Butterworth low-pass filter")
-    _add_design_arguments(low)
-    low.add_argument("-o", "--output", type=Path, required=True, help="header file to write")
-    low.add_argument(
-        "--write-runtime", action="store_true",
-        help="also write filter2c.h next to the output file",
+    _add_lowpass_arguments(low)
+    _add_generate_arguments(low)
+
+    notch_parser = sub.add_parser("notch", help="notch filter that removes one frequency")
+    _add_notch_arguments(notch_parser)
+    _add_generate_arguments(notch_parser)
+    notch_parser.add_argument(
+        "--min-attenuation-db", type=float, default=DEFAULT_MIN_ATTENUATION_DB,
+        help=f"with --verify: required attenuation at the notch frequency "
+             f"(default: {DEFAULT_MIN_ATTENUATION_DB:g} dB)",
     )
-    low.add_argument(
-        "--verify", action="store_true",
-        help="compile the result and compare it with SciPy (needs a C compiler)",
-    )
-    _add_tolerance_argument(low)
 
     sketch = sub.add_parser(
         "target-sketch",
         help="write an ESP32 sketch that runs the filter on the board and prints the result",
     )
-    _add_design_arguments(sketch)
-    sketch.add_argument(
-        "-o", "--output", type=Path, required=True,
-        help="sketch folder to create (its name becomes the sketch name)",
-    )
+    sketch_sub = sketch.add_subparsers(dest="sketch_filter", required=True)
+    for filter_name, add_arguments, help_text in (
+        ("butter-lowpass", _add_lowpass_arguments, "Butterworth low-pass filter"),
+        ("notch", _add_notch_arguments, "notch filter"),
+    ):
+        p = sketch_sub.add_parser(filter_name, help=help_text)
+        add_arguments(p)
+        p.add_argument(
+            "-o", "--output", type=Path, required=True,
+            help="sketch folder to create (its name becomes the sketch name)",
+        )
 
     log = sub.add_parser(
         "check-board-log",
@@ -79,9 +115,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_butter_lowpass(args: argparse.Namespace) -> int:
+def _design_from_args(args: argparse.Namespace) -> FilterDesign:
+    if args.filter == "notch":
+        return notch(args.freq, args.q, args.fs)
+    return butterworth_lowpass(args.order, args.cutoff, args.fs)
+
+
+def _run_generate(args: argparse.Namespace) -> int:
     check_name(args.name)
-    design = butterworth_lowpass(args.order, args.cutoff, args.fs)
+    design = _design_from_args(args)
 
     header = generate_header(design, args.name)
     runtime = runtime_header()
@@ -104,21 +146,36 @@ def _run_butter_lowpass(args: argparse.Namespace) -> int:
         return 1
 
     if args.verify:
-        result = compare_with_scipy(design, header, runtime, args.name, args.tolerance)
+        is_notch = args.filter == "notch"
+        tones = (design.cutoff_hz,) if is_notch else ()
+        result = compare_with_scipy(
+            design, header, runtime, args.name, args.tolerance, tones_hz=tones
+        )
         status = "PASS" if result.passed else "FAIL"
         print(
             f"C code against SciPy: {status} "
             f"(max error {result.max_abs_error:.2e} = {result.relative_error:.2e} of the peak, "
             f"tolerance {result.tolerance:.0e}, {result.samples} samples)"
         )
-        if not result.passed:
+        failed = not result.passed
+        if is_notch:
+            att = measure_attenuation(
+                design, header, runtime, args.name, minimum_db=args.min_attenuation_db
+            )
+            att_status = "PASS" if att.passed else "FAIL"
+            print(
+                f"Attenuation of a {att.frequency_hz:g} Hz tone by the C code: "
+                f"{att.attenuation_db:.0f} dB {att_status} (required: at least {att.minimum_db:g} dB)"
+            )
+            failed = failed or not att.passed
+        if failed:
             print(_FLOAT_HINT, file=sys.stderr)
             return 1
     return 0
 
 
 def _run_target_sketch(args: argparse.Namespace) -> int:
-    design = butterworth_lowpass(args.order, args.cutoff, args.fs)
+    design = _design_from_args(args)
     files = create_sketch(design, args.name, args.output)
     print(f"Wrote sketch folder {args.output} ({design.describe()}):")
     for path in files:
@@ -163,8 +220,8 @@ def _run_check_board_log(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "butter-lowpass":
-            return _run_butter_lowpass(args)
+        if args.command in ("butter-lowpass", "notch"):
+            return _run_generate(args)
         if args.command == "target-sketch":
             return _run_target_sketch(args)
         return _run_check_board_log(args)

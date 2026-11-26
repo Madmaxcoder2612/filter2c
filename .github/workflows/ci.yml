@@ -24,3 +24,7 @@ jobs:
         run: filter2c butter-lowpass --order 4 --cutoff 40 --fs 1000 --name lp40 -o /tmp/lp40.h --write-runtime --verify
       - name: Example header is up to date
         run: diff /tmp/lp40.h examples/Butterworth40Hz/lp40.h
+      - name: Generate the 50 Hz notch example and verify it
+        run: filter2c notch --freq 50 --q 30 --fs 1000 --name notch50 -o /tmp/notch50.h --verify
+      - name: Notch example header is up to date
+        run: diff /tmp/notch50.h examples/HumNotch50Hz/notch50.h

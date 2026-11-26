@@ -11,6 +11,8 @@ import numpy as np
 from scipy import signal
 
 MAX_ORDER = 16
+MIN_Q = 0.5
+MAX_Q = 100.0
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,9 @@ class FilterDesign:
 
     ``sos`` has one row per biquad section: ``[b0, b1, b2, a0, a1, a2]``,
     normalised so that ``a0 == 1``.
+
+    ``cutoff_hz`` is the -3 dB frequency of a low-pass filter, or the centre
+    frequency of a notch filter. ``q`` is only set for a notch.
     """
 
     kind: str
@@ -26,12 +31,18 @@ class FilterDesign:
     fs_hz: float
     cutoff_hz: float
     sos: np.ndarray
+    q: float | None = None
 
     @property
     def sections(self) -> int:
         return int(self.sos.shape[0])
 
     def describe(self) -> str:
+        if self.q is not None:
+            return (
+                f"{self.kind}, frequency {self.cutoff_hz:g} Hz, Q {self.q:g}, "
+                f"sampling {self.fs_hz:g} Hz"
+            )
         return (
             f"{self.kind}, order {self.order}, cutoff {self.cutoff_hz:g} Hz, "
             f"sampling {self.fs_hz:g} Hz"
@@ -64,4 +75,37 @@ def butterworth_lowpass(order: int, cutoff_hz: float, fs_hz: float) -> FilterDes
         fs_hz=float(fs_hz),
         cutoff_hz=float(cutoff_hz),
         sos=np.asarray(sos, dtype=np.float64),
+    )
+
+
+def notch(freq_hz: float, q: float, fs_hz: float) -> FilterDesign:
+    """Design a digital notch filter that removes one frequency, such as 50 Hz mains hum.
+
+    A notch passes everything except a narrow band around ``freq_hz``. The
+    higher the quality factor ``q``, the narrower the band that is removed
+    (its width at -3 dB is about ``freq_hz / q``).
+
+    Args:
+        freq_hz: centre frequency to remove. Must lie between 0 and fs_hz / 2.
+        q: quality factor, 0.5 to 100.
+        fs_hz: sampling rate in Hz.
+    """
+    if not np.isfinite(fs_hz) or fs_hz <= 0:
+        raise ValueError(f"fs_hz must be a positive number, got {fs_hz!r}")
+    if not np.isfinite(freq_hz) or not 0 < freq_hz < fs_hz / 2:
+        raise ValueError(
+            f"freq_hz must be between 0 and fs_hz / 2 = {fs_hz / 2:g}, got {freq_hz!r}"
+        )
+    if not np.isfinite(q) or not MIN_Q <= q <= MAX_Q:
+        raise ValueError(f"q must be between {MIN_Q:g} and {MAX_Q:g}, got {q!r}")
+
+    b, a = signal.iirnotch(freq_hz, q, fs=fs_hz)
+    sos = signal.tf2sos(b, a)
+    return FilterDesign(
+        kind="Notch",
+        order=2,
+        fs_hz=float(fs_hz),
+        cutoff_hz=float(freq_hz),
+        sos=np.asarray(sos, dtype=np.float64),
+        q=float(q),
     )

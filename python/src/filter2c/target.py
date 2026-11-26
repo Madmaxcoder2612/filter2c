@@ -24,7 +24,7 @@ from scipy import signal
 
 from . import __version__
 from .codegen import check_name, float32_literal, generate_header, runtime_header
-from .design import FilterDesign, butterworth_lowpass
+from .design import FilterDesign, butterworth_lowpass, notch
 from .verify import (
     DEFAULT_TOLERANCE,
     VerificationError,
@@ -144,16 +144,29 @@ def create_sketch(
             f"{folder.name!r} is not a usable sketch folder name "
             "(letters, digits, underscores and dashes only)"
         )
-    x = make_test_signal(design.fs_hz, samples)
-    meta = {
-        "filter": "butterworth-lowpass",
-        "order": design.order,
-        "cutoff_hz": design.cutoff_hz,
-        "fs_hz": design.fs_hz,
-        "name": name,
-        "samples": samples,
-        "filter2c_version": __version__,
-    }
+    if design.q is not None:
+        # A notch filter: add a tone at the frequency it is meant to remove.
+        x = make_test_signal(design.fs_hz, samples, tones_hz=(design.cutoff_hz,))
+        meta = {
+            "filter": "notch",
+            "freq_hz": design.cutoff_hz,
+            "q": design.q,
+            "fs_hz": design.fs_hz,
+            "name": name,
+            "samples": samples,
+            "filter2c_version": __version__,
+        }
+    else:
+        x = make_test_signal(design.fs_hz, samples)
+        meta = {
+            "filter": "butterworth-lowpass",
+            "order": design.order,
+            "cutoff_hz": design.cutoff_hz,
+            "fs_hz": design.fs_hz,
+            "name": name,
+            "samples": samples,
+            "filter2c_version": __version__,
+        }
     contents = {
         f"{folder.name}.ino": _SKETCH.substitute(version=__version__, name=name),
         f"{name}.h": generate_header(design, name),
@@ -261,7 +274,10 @@ def check_board_log(
     if not meta_path.exists():
         raise VerificationError(f"{meta_path} not found: is this a folder made by target-sketch?")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    design = butterworth_lowpass(meta["order"], meta["cutoff_hz"], meta["fs_hz"])
+    if meta.get("filter") == "notch":
+        design = notch(meta["freq_hz"], meta["q"], meta["fs_hz"])
+    else:
+        design = butterworth_lowpass(meta["order"], meta["cutoff_hz"], meta["fs_hz"])
     name, samples = meta["name"], int(meta["samples"])
 
     x = read_test_signal(folder)

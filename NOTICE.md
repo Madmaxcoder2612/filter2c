@@ -23,9 +23,11 @@ Other projects exist that run filters on microcontrollers or generate filter cod
 
 Arduino, ESP32, Espressif, MATLAB and other product names are trademarks of their owners. They appear in this repository only to say which hardware or software something works with. This project is not affiliated with or endorsed by them.
 
-## Screenshot
+## Screenshots
 
 `docs/images/esp32-s3-upload.png` is the author's own screenshot of the Arduino IDE (open-source software) showing this project's sketch. Parts of file paths that contained the author's computer user name were covered with black boxes before publishing.
+
+`docs/images/hum-notch-plot.png` is the author's own screenshot of the Arduino IDE Serial Plotter showing the output of this project's `HumNotch50Hz` example. It contains no personal information.
 
 ## Test data
 

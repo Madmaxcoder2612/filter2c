@@ -62,8 +62,14 @@ def check_stability(design: FilterDesign) -> Stability:
     return Stability(max_pole_radius=radius, margin=1.0 - radius, stable=radius < 1.0)
 
 
-def make_test_signal(fs_hz: float, samples: int = 4096, seed: int = 20261125) -> np.ndarray:
-    """Three sine waves plus noise, as float32. Frequencies scale with the sampling rate."""
+def make_test_signal(
+    fs_hz: float, samples: int = 4096, seed: int = 20261125, tones_hz: tuple[float, ...] = ()
+) -> np.ndarray:
+    """Three sine waves plus noise, as float32. Frequencies scale with the sampling rate.
+
+    ``tones_hz`` adds a further sine wave (amplitude 0.5) at each given frequency,
+    for example the frequency that a notch filter is meant to remove.
+    """
     t = np.arange(samples) / fs_hz
     rng = np.random.default_rng(seed)
     x = (
@@ -72,6 +78,8 @@ def make_test_signal(fs_hz: float, samples: int = 4096, seed: int = 20261125) ->
         + 0.25 * np.sin(2 * np.pi * 0.2 * fs_hz * t)
         + 0.1 * rng.standard_normal(samples)
     )
+    for tone in tones_hz:
+        x = x + 0.5 * np.sin(2 * np.pi * tone * t)
     return x.astype(np.float32)
 
 
@@ -141,9 +149,10 @@ def compare_with_scipy(
     name: str,
     tolerance: float = DEFAULT_TOLERANCE,
     compiler: str | None = None,
+    tones_hz: tuple[float, ...] = (),
 ) -> Comparison:
     """Run the test signal through the C code and through SciPy and compare."""
-    x = make_test_signal(design.fs_hz)
+    x = make_test_signal(design.fs_hz, tones_hz=tones_hz)
     from_c = run_c_filter(header, runtime, name, x, compiler)
     reference = signal.sosfilt(design.sos, x.astype(np.float64))
     if from_c.shape != reference.shape:
@@ -160,4 +169,58 @@ def compare_with_scipy(
         relative_error=relative,
         tolerance=tolerance,
         passed=bool(relative <= tolerance),
+    )
+
+
+DEFAULT_MIN_ATTENUATION_DB = 40.0
+
+
+@dataclass(frozen=True)
+class Attenuation:
+    frequency_hz: float
+    attenuation_db: float
+    minimum_db: float
+    samples: int
+    passed: bool
+
+
+def _tone_amplitude(y: np.ndarray, fs_hz: float, frequency_hz: float) -> float:
+    """Amplitude of the sine wave at ``frequency_hz`` inside ``y`` (least squares projection)."""
+    n = np.arange(y.size)
+    w = 2 * np.pi * frequency_hz / fs_hz
+    return float(2.0 / y.size * np.hypot(np.sum(y * np.cos(w * n)), np.sum(y * np.sin(w * n))))
+
+
+def measure_attenuation(
+    design: FilterDesign,
+    header: str,
+    runtime: str,
+    name: str,
+    frequency_hz: float | None = None,
+    minimum_db: float = DEFAULT_MIN_ATTENUATION_DB,
+    compiler: str | None = None,
+) -> Attenuation:
+    """Feed a sine wave of amplitude 1 through the compiled C code and measure what is left.
+
+    The filter needs time to settle, so the first part of the output is
+    ignored. How long depends on how close the poles are to the unit circle.
+    """
+    frequency = design.cutoff_hz if frequency_hz is None else frequency_hz
+    radius = check_stability(design).max_pole_radius
+    if radius >= 1.0:
+        raise VerificationError("the filter is not stable, so its attenuation is meaningless")
+    settle = int(min(max(25.0 / (1.0 - radius), 2000.0), 100_000.0))
+    window = int(round(50 * design.fs_hz / frequency))  # about 50 periods
+    window = min(max(window, 100), 100_000)
+    n = np.arange(settle + window)
+    x = np.sin(2 * np.pi * frequency * n / design.fs_hz).astype(np.float32)
+    y = run_c_filter(header, runtime, name, x, compiler)
+    residual = _tone_amplitude(y[settle:], design.fs_hz, frequency)
+    attenuation_db = -20.0 * float(np.log10(max(residual, 1e-12)))
+    return Attenuation(
+        frequency_hz=float(frequency),
+        attenuation_db=attenuation_db,
+        minimum_db=minimum_db,
+        samples=int(x.size),
+        passed=bool(attenuation_db >= minimum_db),
     )

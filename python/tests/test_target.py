@@ -47,16 +47,18 @@ struct SerialStub {
         return n;
     }
 };
-static SerialStub Serial;
+static SerialStub Serial __attribute__((unused));
 
 struct EspStub {
     uint32_t getCycleCount() { static uint32_t c = 0; c += 100000; return c; }
 };
-static EspStub ESP;
+static EspStub ESP __attribute__((unused));
 
 static inline unsigned int getCpuFrequencyMhz() { return 240; }
 static inline void delay(unsigned long) {}
 static inline unsigned long millis() { return 0; }
+static inline unsigned long micros() { return 0; }
+static inline int analogRead(int) { return 2048; }
 """
 
 
@@ -179,7 +181,7 @@ def test_folder_without_metadata_is_rejected(tmp_path):
 @needs_cpp
 def test_cli_end_to_end(tmp_path, capsys):
     sketch = tmp_path / "Esp32Test"
-    assert main(["target-sketch", "--order", "4", "--cutoff", "40", "--fs", "1000",
+    assert main(["target-sketch", "butter-lowpass", "--order", "4", "--cutoff", "40", "--fs", "1000",
                  "--name", "lp40", "-o", str(sketch)]) == 0
     log_file = tmp_path / "board.txt"
     log_file.write_text(run_sketch_on_pc(sketch, tmp_path), encoding="utf-8")
@@ -191,7 +193,7 @@ def test_cli_end_to_end(tmp_path, capsys):
 
 def test_cli_reports_missing_log_file(tmp_path, capsys):
     sketch = tmp_path / "S1"
-    main(["target-sketch", "--order", "4", "--cutoff", "40", "--fs", "1000",
+    main(["target-sketch", "butter-lowpass", "--order", "4", "--cutoff", "40", "--fs", "1000",
           "--name", "lp40", "-o", str(sketch)])
     assert main(["check-board-log", str(sketch), str(tmp_path / "missing.txt")]) == 2
     assert "error" in capsys.readouterr().err
