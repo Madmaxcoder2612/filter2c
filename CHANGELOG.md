@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/). While the version is 0.x, the API may still change.
 
-## 0.1.0 (not yet released)
+## 0.1.0 (2026-11-26)
 
 First public version.
 
