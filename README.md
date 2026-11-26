@@ -234,6 +234,17 @@ The sketch is also tested on the PC against a small stand-in for the Arduino fun
   <em>The self-test sketch after upload to the ESP32-S3 in the Arduino IDE. Parts of the file paths are covered with black boxes because they contain the author's computer user name.</em>
 </p>
 
+**All four filter types, on the real board.** The same self-test was run on the same ESP32-S3 for each filter type. Every log is in [results/](results/), and a test checks each one on every push.
+
+| Filter | Sampling rate | Error against SciPy (share of the output peak, limit 1e-4) | Clock cycles per sample | Time per sample |
+|---|---|---|---|---|
+| Butterworth low-pass, order 4, 40 Hz | 1000 Hz | 2.8e-06 | 43 | 0.18 µs |
+| Butterworth high-pass, order 2, 0.5 Hz | 250 Hz | 5.0e-05 | 29 | 0.12 µs |
+| Butterworth band-pass, order 2 per edge, 0.5 to 40 Hz (ECG band) | 250 Hz | 6.9e-05 | 46 | 0.19 µs |
+| Notch, 50 Hz, Q 30 (the test signal contains a 50 Hz tone) | 1000 Hz | 6.0e-06 | 26 | 0.11 µs |
+
+All four passed. The two filters with a cutoff close to zero frequency (high-pass and ECG band-pass) are the ones that come closest to the limit, about 50 % and 70 % of it, which matches the float32 behaviour described above. The times cover the filter only, after a warm-up pass, and exclude reading an ADC or printing.
+
 ## Live demo: removing 50 Hz mains hum
 
 The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) filters a bare jumper wire plugged into an analog pin of an ESP32-S3, sampled at 1000 Hz. The wire works like an antenna and picks up the hum from nearby mains wiring. No other parts are needed.
@@ -274,11 +285,12 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 | [python/src/filter2c/verify.py](python/src/filter2c/verify.py) | Stability check, compile-and-compare against SciPy |
 | [python/src/filter2c/target.py](python/src/filter2c/target.py) | Writes the on-board self-test sketch and checks the board's printed output |
 | [python/src/filter2c/cli.py](python/src/filter2c/cli.py) | The `filter2c` command |
-| [python/tests/](python/tests/) | 159 tests, including a closed-form check and a check that a wrong coefficient is caught |
+| [python/tests/](python/tests/) | 165 tests, including a closed-form check and a check that a wrong coefficient is caught |
 | [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch that filters an analog input, and its generated header |
-| [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch |
+| [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch (low-pass) |
+| [examples/ESP32SelfTestHighpass/](examples/ESP32SelfTestHighpass/), [ESP32SelfTestEcg](examples/ESP32SelfTestEcg/), [ESP32SelfTestNotch](examples/ESP32SelfTestNotch/) | The same self-test for the high-pass, the ECG band-pass and the notch |
 | [examples/HumNotch50Hz/](examples/HumNotch50Hz/) | Sketch that removes 50 Hz hum from an analog pin, and its generated header |
-| [results/](results/) | The real serial log from the ESP32-S3 run |
+| [results/](results/) | The real serial logs from the ESP32-S3 runs, one per filter type |
 | [NOTICE.md](NOTICE.md) | Prior art, licences, trademarks |
 
 ```text
@@ -296,8 +308,8 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 - **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The PC tests use a C compiler (C99 and C++11, warnings as errors) and a small stand-in for the Arduino functions. The examples are also built with `arduino-cli`: checked locally for the ESP32-S3 (esp32 core 3.3.12), and the CI builds them for the ESP32-S3 and the Arduino UNO R4 WiFi.
 - **Float32 only.** The error grows when the cutoff is below roughly 1 % of the sampling rate (see the table above). Fixed-point and double precision output are not available yet.
-- **Four filter types.** Butterworth low-pass, high-pass and band-pass, and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo). The high-pass and band-pass have only been run on the PC, including their board self-test sketch on the stand-in for the Arduino functions, and not on a board.
-- **ECG filters are tight in float32.** The 0.5 to 40 Hz band-pass passes at 250 Hz and 500 Hz sampling with little margin and fails at 1 kHz (see the table above). It has not been tested on real ECG data.
+- **Four filter types.** Butterworth low-pass, high-pass and band-pass, and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo). All four have passed the self-test on one ESP32-S3 (see the table in [Testing on a real board](#testing-on-a-real-board)).
+- **ECG filters are tight in float32.** The 0.5 to 40 Hz band-pass passes at 250 Hz and 500 Hz sampling with little margin and fails at 1 kHz (see the table above). On the board it used about 70 % of the error limit at 250 Hz. It has not been tested on real ECG data.
 - **The check covers one test signal.** It compares the output on a fixed signal (three sine waves and noise). It does not prove correctness for every possible input, and it does not check overflow behaviour or timing on the target.
 - **The compiler used for verification is the PC compiler.** A different compiler or a target without hardware float may give slightly different rounding.
 - **Not a certified tool.** This is a learning and portfolio project. For a safety-relevant product, the generated code must be verified on the target, inside your own process.

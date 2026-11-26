@@ -46,6 +46,9 @@ jobs:
                 version: 3.3.12
             sketches: |
               - examples/ESP32SelfTest
+              - examples/ESP32SelfTestHighpass
+              - examples/ESP32SelfTestEcg
+              - examples/ESP32SelfTestNotch
               - examples/HumNotch50Hz
               - examples/Butterworth40Hz
           - board: UNO R4 WiFi

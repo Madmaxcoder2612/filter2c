@@ -1,0 +1,9 @@
+{
+  "filter": "butterworth-highpass",
+  "order": 2,
+  "cutoff_hz": 0.5,
+  "fs_hz": 250.0,
+  "name": "hp",
+  "samples": 1024,
+  "filter2c_version": "0.1.0"
+}

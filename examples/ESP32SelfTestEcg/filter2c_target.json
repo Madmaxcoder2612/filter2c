@@ -1,0 +1,10 @@
+{
+  "filter": "butterworth-bandpass",
+  "order": 2,
+  "low_hz": 0.5,
+  "high_hz": 40.0,
+  "fs_hz": 250.0,
+  "name": "ecg",
+  "samples": 1024,
+  "filter2c_version": "0.1.0"
+}
