@@ -280,6 +280,12 @@ Filter output against SciPy applied to the same raw readings: PASS (max error 1.
 
 **Hand test with the Serial Plotter.** The `Butterworth40Hz` example was also run on the board with the Serial Plotter, holding one end of a jumper wire on the analog pin (the other end in the air, on 3V3, or on GND). With the wire in the air, the pin picks up so much 50 Hz mains hum that the ADC clips between 0 and 4095 and the raw line looks like a square wave. The filtered line is a smooth wave about 981 counts high around 2059, where the filter's gain at 50 Hz predicts 981 around 2048. On 3V3 and on GND both lines go flat, at 4095 and at 0. The Plotter rescales its axis, so the two flat lines look alike, and only the numbers on the axis differ. The numbers come from reading one frame of a screen recording, so they are approximate, to about 10 counts.
 
+<p align="center">
+  <img src="docs/images/butterworth40hz-plotter.gif" alt="Serial Plotter recording: with the wire in the air a clipped 50 Hz square wave in blue and a smooth wave in orange, then both lines flat when the wire touches 3V3" width="900" />
+  <br/>
+  <em>Seven seconds from the recording, Serial Plotter. Blue: raw ADC readings. Orange: filtered output. In the air the pin picks up 50 Hz hum, the ADC clips it into a square wave and the filter turns it into a smooth wave. On 3V3 both lines go flat. Look at the numbers on the left axis: the Plotter rescales itself, so a flat line at 4095 and a flat line at 0 look alike.</em>
+</p>
+
 ## Live demo: removing 50 Hz mains hum
 
 The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) filters a bare jumper wire plugged into an analog pin of an ESP32-S3, sampled at 1000 Hz. The wire works like an antenna and picks up the hum from nearby mains wiring. No other parts are needed.
@@ -320,11 +326,13 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 | [python/src/filter2c/verify.py](python/src/filter2c/verify.py) | Stability check, compile-and-compare against SciPy |
 | [python/src/filter2c/target.py](python/src/filter2c/target.py) | Writes the on-board self-test sketch and checks the board's printed output |
 | [python/src/filter2c/cli.py](python/src/filter2c/cli.py) | The `filter2c` command |
-| [python/tests/](python/tests/) | 196 tests, including a closed-form check and a check that a wrong coefficient is caught |
+| [python/tests/](python/tests/) | 212 tests, including a closed-form check and a check that a wrong coefficient is caught |
 | [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch that filters an analog input, and its generated header |
 | [examples/LiveCheck40Hz/](examples/LiveCheck40Hz/) | Live check with the board's analog input and one jumper wire |
 | [python/src/filter2c/live.py](python/src/filter2c/live.py) | Writes the live-check sketch and checks its output |
 | [tools/plot_live_log.py](tools/plot_live_log.py) | Draws the README figure from a real live log (needs matplotlib) |
+| [tools/bump_version.py](tools/bump_version.py), [tools/regenerate_examples.py](tools/regenerate_examples.py), [tools/release_notes.py](tools/release_notes.py) | Maintenance: change the version everywhere, regenerate the examples, check a release tag |
+| [docs/releasing.md](docs/releasing.md), [CONTRIBUTING.md](CONTRIBUTING.md) | How a release is made, and how to contribute |
 | [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch (low-pass) |
 | [examples/ESP32SelfTestHighpass/](examples/ESP32SelfTestHighpass/), [ESP32SelfTestEcg](examples/ESP32SelfTestEcg/), [ESP32SelfTestNotch](examples/ESP32SelfTestNotch/) | The same self-test for the high-pass, the ECG band-pass and the notch |
 | [examples/HumNotch50Hz/](examples/HumNotch50Hz/) | Sketch that removes 50 Hz hum from an analog pin, and its generated header |

@@ -31,6 +31,21 @@ jobs:
       - name: Generate the ECG band-pass (0.5 to 40 Hz at 250 Hz) and verify it
         run: filter2c butter-bandpass --order 2 --low 0.5 --high 40 --fs 250 --name ecg -o /tmp/ecg.h --verify
 
+  # The package says it works with numpy 1.24 and scipy 1.10 or newer, so test exactly those.
+  oldest-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install the oldest supported numpy and scipy
+        run: python -m pip install "numpy==1.24.4" "scipy==1.10.1"
+      - name: Install the package
+        run: python -m pip install -e "python[test]"
+      - name: Tests
+        run: python -m pytest -q
+
   # Builds the examples with the real Arduino toolchain (arduino-cli), for two boards.
   arduino-build:
     runs-on: ubuntu-latest

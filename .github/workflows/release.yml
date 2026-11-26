@@ -1,0 +1,97 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the package and, after a reviewer approves the "pypi"
+# environment in GitHub, publishes it to PyPI and creates a GitHub release.
+# Run the workflow by hand with target "testpypi" for a dry run on TestPyPI first.
+# No password or token is stored anywhere: PyPI trusts this workflow ("trusted publishing").
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install build twine
+      - name: The tag, the package version and the changelog must agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python tools/release_notes.py "$GITHUB_REF_NAME" > /dev/null
+      - name: Build
+        run: python -m build python
+      - name: Check the package description
+        run: python -m twine check python/dist/*
+      - name: Install the built wheel in a clean environment and use it
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install python/dist/*.whl
+          /tmp/clean/bin/filter2c --version
+          /tmp/clean/bin/filter2c butter-lowpass --order 4 --cutoff 40 --fs 1000 --name lp40 -o /tmp/lp40.h --write-runtime --verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: python/dist/
+
+  publish-testpypi:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish-pypi
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create the GitHub release from the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/release_notes.py "$GITHUB_REF_NAME" > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "filter2c ${GITHUB_REF_NAME#v}" --notes-file notes.md

@@ -19,6 +19,8 @@ Other projects exist that run filters on microcontrollers or generate filter cod
 | SciPy | BSD-3-Clause | Filter design and the reference filter |
 | pytest (tests only) | MIT | Test runner |
 
+`docs/images/butterworth40hz-plotter.gif` is a seven-second cut from a screen recording of the Serial Plotter, made by the author and converted to a GIF without sound. The mouse pointer was painted over. It contains no personal information.
+
 ## Tools used only to draw figures
 
 `tools/plot_live_log.py` uses matplotlib (matplotlib licence, a permissive BSD-style licence) to draw `docs/images/live-check-40hz.png` from the author's own measurement. It is not a dependency of the package. The figure uses the DejaVu Sans font that ships with matplotlib (a free licence that allows use and embedding).

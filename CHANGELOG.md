@@ -2,33 +2,39 @@
 
 This project follows [Semantic Versioning](https://semver.org/). While the version is 0.x, the API may still change.
 
-## Unreleased
+## 0.1.0 (not yet released)
 
-- Live check with the board's own analog input: `filter2c target-sketch ... --live` and `filter2c check-live-log`, example `LiveCheck40Hz`. First real run on an ESP32-S3 (GPIO2 wired to GPIO1): sample period 1000.0 us with 0.7 us spread, and the filter output equals SciPy on the real readings (2.66e-06 of the peak). Figure drawn from the log by `tools/plot_live_log.py`.
-- Fix: `Butterworth40Hz` was missing its own copy of `filter2c.h` and only compiled with the library installed. Every example now carries the header, a test checks it, and the CI builds the examples without the library installed. The example now prints at 921600 baud, because 115200 baud cannot carry 1000 lines per second.
+First public version.
 
-- Real ESP32-S3 results for all four filter types (low-pass, high-pass, ECG band-pass, notch), with the logs in `results/` and tests that check them. Sketches `ESP32SelfTestHighpass`, `ESP32SelfTestEcg` and `ESP32SelfTestNotch`.
+### Filters
 
-- Butterworth high-pass and band-pass (`filter2c butter-highpass`, `filter2c butter-bandpass`, `filter2c.butterworth_highpass`, `filter2c.butterworth_bandpass`), also for `target-sketch`. Checked against SciPy's frequency response and, for the high-pass, against the closed-form gain. The 0.5 to 40 Hz ECG band passes in float32 at 250 and 500 Hz sampling and fails at 1 kHz, which the tool reports.
+- Butterworth low-pass, high-pass and band-pass, and a notch filter, designed with SciPy as second-order sections (`filter2c.butterworth_lowpass`, `butterworth_highpass`, `butterworth_bandpass`, `notch`).
+- C header generator and a header-only biquad runtime (Direct Form II Transposed, 32-bit float) that works in C99, C++ and Arduino sketches. No dynamic memory, no dependencies.
+- Command line tool: `filter2c butter-lowpass`, `butter-highpass`, `butter-bandpass`, `notch`.
 
-- CI builds the examples with `arduino-cli` for the ESP32-S3 and the Arduino UNO R4 WiFi, and checks the library with `arduino-lint`. The three examples were also compiled locally for the ESP32-S3.
-- `HumNotch50Hz` uses `Serial.print` and picks the analog pin by board, so it builds on boards without `Serial.printf`. Re-run on the ESP32-S3: same result.
+### Verification
 
-- Notch filter (`filter2c notch`, `filter2c.notch`) for removing a single frequency such as 50 Hz mains hum.
-- Verification for notch filters: attenuation of a pure tone at the notch frequency, measured on the compiled C code.
-- Screen recording (GIF) of the live hum demo in the README.
-- Example `HumNotch50Hz`, tried live on an ESP32-S3: the 50 Hz component drops by about 36 dB (read from a screenshot, approximate); the 100 and 150 Hz harmonics stay.
-- `target-sketch` now takes the filter type: `target-sketch butter-lowpass ...` or `target-sketch notch ...`. The notch self-test signal contains a tone at the notch frequency.
+- Stability check after rounding the coefficients to float.
+- `--verify`: the generated header is compiled with a C compiler and compared with SciPy on a test signal. Failures come with a hint when 32-bit float is not precise enough, for example the 0.5 to 40 Hz ECG band at 1 kHz sampling.
+- Notch filters: the attenuation of a pure tone at the notch frequency is measured on the compiled C code.
+- Tests compare the compiled C code with closed-form Butterworth gains, which are independent of SciPy, and check that a wrong coefficient is caught.
 
-- `filter2c target-sketch`: writes an ESP32 sketch that runs the filter on the board and prints the result and the time per sample.
-- `filter2c check-board-log`: compares the board's printed output with SciPy and with the PC build.
-- Example `ESP32SelfTest`.
-- First real hardware result: ESP32-S3 at 240 MHz matches SciPy to 2.8e-06 of the peak, 43 cycles per sample (`results/esp32-s3-board-log.txt`).
+### Checks on a real board
 
-## 0.1.0 (unreleased)
+- `filter2c target-sketch <filter>`: writes an ESP32 sketch that runs the filter on a built-in test signal and prints the result and the time per sample. `filter2c check-board-log` compares the board's output with SciPy and with the PC build.
+- `filter2c target-sketch <filter> --live` and `filter2c check-live-log`: a live check with the board's own analog input and one jumper wire. It checks the real sample rate, that the input changed, and that the filter output equals SciPy on the real readings.
+- Real ESP32-S3 results (240 MHz) for all four filter types, with the logs in `results/` and tests that check them: errors from 2.8e-06 to 6.9e-05 of the output peak, 26 to 46 clock cycles per sample. The live check measured a sample period of 1000.0 us with 0.7 us spread.
 
-- Butterworth low-pass design (order 1 to 16) as second-order sections, using SciPy.
-- C header generator and a header-only biquad runtime (Direct Form II Transposed, float).
-- Verification: stability after rounding to float, and a compile-and-compare check against SciPy.
-- Command line tool `filter2c butter-lowpass`.
-- Arduino library layout and the `Butterworth40Hz` example.
+### Examples
+
+- `Butterworth40Hz`, `HumNotch50Hz` (removes 50 Hz mains hum from a bare wire on an analog pin), `LiveCheck40Hz`, and the self-test sketches `ESP32SelfTest`, `ESP32SelfTestHighpass`, `ESP32SelfTestEcg` and `ESP32SelfTestNotch`. Every example folder carries its own copy of `filter2c.h`, and a test checks this.
+
+### Continuous integration
+
+- Python tests on 3.10 and 3.12, the generated examples are checked for being up to date, all examples are built with `arduino-cli` for the ESP32-S3 (the two portable ones also for the UNO R4 WiFi) without the library installed, and the library is checked with `arduino-lint`.
+
+### Known limitations
+
+- 32-bit float only. Double precision and fixed-point output are planned.
+- Tested on one board, an ESP32-S3. The UNO R4 and a classic ESP32 have not been run.
+- Not tested on real ECG data.
