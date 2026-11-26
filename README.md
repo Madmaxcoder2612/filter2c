@@ -1,6 +1,7 @@
 # filter2c
 
 [![CI](https://github.com/Madmaxcoder2612/filter2c/actions/workflows/ci.yml/badge.svg)](https://github.com/Madmaxcoder2612/filter2c/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/filter2c)](https://pypi.org/project/filter2c/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Status: early alpha](https://img.shields.io/badge/status-early%20alpha-orange)](#limitations)
@@ -105,6 +106,12 @@ So the usual ECG rate of 250 Hz works in float32 with little margin, and 1 kHz d
 ## Quick start
 
 Requires Python 3.10 or newer and, for `--verify`, a C compiler (gcc or clang).
+
+```bash
+pip install filter2c
+```
+
+To run the tests, the examples and the board checks from this repository, clone it and install it in editable mode instead:
 
 ```bash
 git clone https://github.com/Madmaxcoder2612/filter2c.git
