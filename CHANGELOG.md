@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
 
 ## Unreleased
 
+- Butterworth high-pass and band-pass (`filter2c butter-highpass`, `filter2c butter-bandpass`, `filter2c.butterworth_highpass`, `filter2c.butterworth_bandpass`), also for `target-sketch`. Checked against SciPy's frequency response and, for the high-pass, against the closed-form gain. The 0.5 to 40 Hz ECG band passes in float32 at 250 and 500 Hz sampling and fails at 1 kHz, which the tool reports.
+
 - CI builds the examples with `arduino-cli` for the ESP32-S3 and the Arduino UNO R4 WiFi, and checks the library with `arduino-lint`. The three examples were also compiled locally for the ESP32-S3.
 - `HumNotch50Hz` uses `Serial.print` and picks the analog pin by board, so it builds on boards without `Serial.printf`. Re-run on the ESP32-S3: same result.
 

@@ -1,6 +1,8 @@
 """Command line interface.
 
 filter2c butter-lowpass ...        write C code for a Butterworth low-pass filter
+filter2c butter-highpass ...       write C code for a Butterworth high-pass filter
+filter2c butter-bandpass ...       write C code for a Butterworth band-pass filter
 filter2c notch ...                 write C code for a notch filter
 filter2c target-sketch <filter>    write an ESP32 self-test sketch
 filter2c check-board-log ...       check what the board printed
@@ -13,7 +15,13 @@ from pathlib import Path
 
 from . import __version__
 from .codegen import check_name, generate_header, runtime_header
-from .design import FilterDesign, butterworth_lowpass, notch
+from .design import (
+    FilterDesign,
+    butterworth_bandpass,
+    butterworth_highpass,
+    butterworth_lowpass,
+    notch,
+)
 from .target import check_board_log, create_sketch
 from .verify import (
     DEFAULT_MIN_ATTENUATION_DB,
@@ -38,6 +46,26 @@ def _add_lowpass_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fs", type=float, required=True, help="sampling rate in Hz")
     parser.add_argument("--name", default="filter", help="C name of the filter (default: filter)")
     parser.set_defaults(filter="butter-lowpass")
+
+
+def _add_highpass_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--order", type=int, required=True, help="filter order (1 to 16)")
+    parser.add_argument("--cutoff", type=float, required=True, help="-3 dB frequency in Hz")
+    parser.add_argument("--fs", type=float, required=True, help="sampling rate in Hz")
+    parser.add_argument("--name", default="filter", help="C name of the filter (default: filter)")
+    parser.set_defaults(filter="butter-highpass")
+
+
+def _add_bandpass_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--order", type=int, required=True,
+        help="order of each band edge (1 to 16); the filter as a whole has twice this order",
+    )
+    parser.add_argument("--low", type=float, required=True, help="lower -3 dB edge in Hz")
+    parser.add_argument("--high", type=float, required=True, help="upper -3 dB edge in Hz")
+    parser.add_argument("--fs", type=float, required=True, help="sampling rate in Hz")
+    parser.add_argument("--name", default="filter", help="C name of the filter (default: filter)")
+    parser.set_defaults(filter="butter-bandpass")
 
 
 def _add_notch_arguments(parser: argparse.ArgumentParser) -> None:
@@ -80,6 +108,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_lowpass_arguments(low)
     _add_generate_arguments(low)
 
+    high = sub.add_parser("butter-highpass", help="Butterworth high-pass filter")
+    _add_highpass_arguments(high)
+    _add_generate_arguments(high)
+
+    band = sub.add_parser("butter-bandpass", help="Butterworth band-pass filter")
+    _add_bandpass_arguments(band)
+    _add_generate_arguments(band)
+
     notch_parser = sub.add_parser("notch", help="notch filter that removes one frequency")
     _add_notch_arguments(notch_parser)
     _add_generate_arguments(notch_parser)
@@ -96,6 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
     sketch_sub = sketch.add_subparsers(dest="sketch_filter", required=True)
     for filter_name, add_arguments, help_text in (
         ("butter-lowpass", _add_lowpass_arguments, "Butterworth low-pass filter"),
+        ("butter-highpass", _add_highpass_arguments, "Butterworth high-pass filter"),
+        ("butter-bandpass", _add_bandpass_arguments, "Butterworth band-pass filter"),
         ("notch", _add_notch_arguments, "notch filter"),
     ):
         p = sketch_sub.add_parser(filter_name, help=help_text)
@@ -118,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
 def _design_from_args(args: argparse.Namespace) -> FilterDesign:
     if args.filter == "notch":
         return notch(args.freq, args.q, args.fs)
+    if args.filter == "butter-highpass":
+        return butterworth_highpass(args.order, args.cutoff, args.fs)
+    if args.filter == "butter-bandpass":
+        return butterworth_bandpass(args.order, args.low, args.high, args.fs)
     return butterworth_lowpass(args.order, args.cutoff, args.fs)
 
 
@@ -220,7 +262,7 @@ def _run_check_board_log(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command in ("butter-lowpass", "notch"):
+        if args.command in ("butter-lowpass", "butter-highpass", "butter-bandpass", "notch"):
             return _run_generate(args)
         if args.command == "target-sketch":
             return _run_target_sketch(args)

@@ -28,6 +28,8 @@ jobs:
         run: filter2c notch --freq 50 --q 30 --fs 1000 --name notch50 -o /tmp/notch50.h --verify
       - name: Notch example header is up to date
         run: diff /tmp/notch50.h examples/HumNotch50Hz/notch50.h
+      - name: Generate the ECG band-pass (0.5 to 40 Hz at 250 Hz) and verify it
+        run: filter2c butter-bandpass --order 2 --low 0.5 --high 40 --fs 250 --name ecg -o /tmp/ecg.h --verify
 
   # Builds the examples with the real Arduino toolchain (arduino-cli), for two boards.
   arduino-build:

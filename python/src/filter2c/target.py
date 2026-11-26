@@ -24,7 +24,13 @@ from scipy import signal
 
 from . import __version__
 from .codegen import check_name, float32_literal, generate_header, runtime_header
-from .design import FilterDesign, butterworth_lowpass, notch
+from .design import (
+    FilterDesign,
+    butterworth_bandpass,
+    butterworth_highpass,
+    butterworth_lowpass,
+    notch,
+)
 from .verify import (
     DEFAULT_TOLERANCE,
     VerificationError,
@@ -132,6 +138,33 @@ static const float f2c_test_input[F2C_TEST_SAMPLES] = {{
 """
 
 
+def _design_parameters(design: FilterDesign) -> dict:
+    """The numbers needed to design the same filter again, for the metadata file."""
+    if design.q is not None:
+        return {"filter": "notch", "freq_hz": design.cutoff_hz, "q": design.q}
+    if design.high_hz is not None:
+        return {"filter": "butterworth-bandpass", "order": design.order,
+                "low_hz": design.cutoff_hz, "high_hz": design.high_hz}
+    if design.kind == "Butterworth high-pass":
+        return {"filter": "butterworth-highpass", "order": design.order,
+                "cutoff_hz": design.cutoff_hz}
+    return {"filter": "butterworth-lowpass", "order": design.order, "cutoff_hz": design.cutoff_hz}
+
+
+def _design_from_meta(meta: dict) -> FilterDesign:
+    """Rebuild the design from a metadata file (see ``_design_parameters``)."""
+    kind, fs = meta.get("filter"), meta["fs_hz"]
+    if kind == "notch":
+        return notch(meta["freq_hz"], meta["q"], fs)
+    if kind == "butterworth-bandpass":
+        return butterworth_bandpass(meta["order"], meta["low_hz"], meta["high_hz"], fs)
+    if kind == "butterworth-highpass":
+        return butterworth_highpass(meta["order"], meta["cutoff_hz"], fs)
+    if kind == "butterworth-lowpass":
+        return butterworth_lowpass(meta["order"], meta["cutoff_hz"], fs)
+    raise VerificationError(f"unknown filter type {kind!r} in {META_FILE}")
+
+
 def create_sketch(
     design: FilterDesign, name: str, folder: Path, samples: int = SAMPLES
 ) -> list[Path]:
@@ -144,29 +177,16 @@ def create_sketch(
             f"{folder.name!r} is not a usable sketch folder name "
             "(letters, digits, underscores and dashes only)"
         )
-    if design.q is not None:
-        # A notch filter: add a tone at the frequency it is meant to remove.
-        x = make_test_signal(design.fs_hz, samples, tones_hz=(design.cutoff_hz,))
-        meta = {
-            "filter": "notch",
-            "freq_hz": design.cutoff_hz,
-            "q": design.q,
-            "fs_hz": design.fs_hz,
-            "name": name,
-            "samples": samples,
-            "filter2c_version": __version__,
-        }
-    else:
-        x = make_test_signal(design.fs_hz, samples)
-        meta = {
-            "filter": "butterworth-lowpass",
-            "order": design.order,
-            "cutoff_hz": design.cutoff_hz,
-            "fs_hz": design.fs_hz,
-            "name": name,
-            "samples": samples,
-            "filter2c_version": __version__,
-        }
+    # A notch filter gets a tone at the frequency it is meant to remove.
+    tones = (design.cutoff_hz,) if design.q is not None else ()
+    x = make_test_signal(design.fs_hz, samples, tones_hz=tones)
+    meta = {
+        **_design_parameters(design),
+        "fs_hz": design.fs_hz,
+        "name": name,
+        "samples": samples,
+        "filter2c_version": __version__,
+    }
     contents = {
         f"{folder.name}.ino": _SKETCH.substitute(version=__version__, name=name),
         f"{name}.h": generate_header(design, name),
@@ -274,10 +294,7 @@ def check_board_log(
     if not meta_path.exists():
         raise VerificationError(f"{meta_path} not found: is this a folder made by target-sketch?")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    if meta.get("filter") == "notch":
-        design = notch(meta["freq_hz"], meta["q"], meta["fs_hz"])
-    else:
-        design = butterworth_lowpass(meta["order"], meta["cutoff_hz"], meta["fs_hz"])
+    design = _design_from_meta(meta)
     name, samples = meta["name"], int(meta["samples"])
 
     x = read_test_signal(folder)

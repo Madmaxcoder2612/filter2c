@@ -78,6 +78,29 @@ The filter stays stable in all cases, it just becomes inaccurate. This is exactl
 
 Tests also check that a 200 Hz tone passes with less than 0.1 dB change, that the gain is 1 at DC and at the Nyquist frequency, and that a coefficient that is 5 % off is caught. Real mains frequency drifts by a fraction of a hertz, so a very narrow notch (high Q) may miss it.
 
+**High-pass and band-pass for ECG.** A high-pass removes slow drift, and a band-pass keeps one range, for example 0.5 to 40 Hz for an ECG. For these the compiled C code is checked against SciPy's frequency response, and the high-pass also against the closed-form Butterworth gain, which is textbook mathematics and independent of SciPy. A 4th-order high-pass with a 40 Hz cutoff at 1000 Hz sampling:
+
+| Frequency | Gain of the compiled C code | Closed-form gain |
+|---|---|---|
+| 10 Hz | 0.0038 | 0.0038 |
+| 20 Hz | 0.0614 | 0.0614 |
+| 40 Hz | 0.7071 | 0.7071 |
+| 80 Hz | 0.9983 | 0.9983 |
+| 200 Hz | 1.0000 | 1.0000 |
+
+**The ECG band is where float32 gets tight.** The 0.5 Hz edge is very close to zero frequency, and the closer a filter's poles are to the unit circle, the more 32-bit rounding hurts. Error against SciPy, relative to the output peak, limit 1e-4:
+
+| Filter (order 2 per edge) | Sampling rate | Largest pole radius | Error | Verdict |
+|---|---|---|---|---|
+| High-pass 0.5 Hz | 250 Hz | 0.9912 | 5.3e-05 | pass |
+| Band-pass 0.5 to 40 Hz | 250 Hz | 0.9912 | 7.3e-05 | pass, close to the limit |
+| Band-pass 0.5 to 40 Hz | 500 Hz | 0.9956 | 8.3e-05 | pass, close to the limit |
+| Band-pass 0.5 to 40 Hz | 1000 Hz | 0.9978 | 1.8e-04 | **fail** |
+| Band-pass 1 to 40 Hz | 250 Hz | 0.9824 | 3.1e-05 | pass |
+| Band-pass 1 to 40 Hz | 1000 Hz | 0.9956 | 1.3e-04 | **fail** |
+
+So the usual ECG rate of 250 Hz works in float32 with little margin, and 1 kHz does not. The tool tells you when that happens. Double precision output is planned for exactly this case.
+
 ## Quick start
 
 Requires Python 3.10 or newer and, for `--verify`, a C compiler (gcc or clang).
@@ -119,15 +142,29 @@ C code against SciPy: PASS (max error 1.06e-05 = 5.61e-06 of the peak, tolerance
 Attenuation of a 50 Hz tone by the C code: 98 dB PASS (required: at least 40 dB)
 ```
 
+Make the usual ECG band-pass, 0.5 to 40 Hz at 250 Hz sampling (`butter-highpass --cutoff` works the same way for a high-pass):
+
+```bash
+filter2c butter-bandpass --order 2 --low 0.5 --high 40 --fs 250 --name ecg -o ecg.h --write-runtime --verify
+```
+
+```text
+Wrote ecg.h (Butterworth band-pass, order 2 per edge, passband 0.5 to 40 Hz, sampling 250 Hz, 2 section(s))
+Wrote filter2c.h
+Stability after rounding to float: stable (largest pole radius 0.991158350)
+C code against SciPy: PASS (max error 1.26e-04 = 7.30e-05 of the peak, tolerance 1e-04, 4096 samples)
+```
+
 Use it from Python instead:
 
 ```python
-from filter2c import butterworth_lowpass, notch, generate_header
+from filter2c import butterworth_lowpass, butterworth_bandpass, notch, generate_header
 
 design = butterworth_lowpass(order=4, cutoff_hz=40, fs_hz=1000)
 header_text = generate_header(design, "lp40")
 
 hum_filter = notch(freq_hz=50, q=30, fs_hz=1000)
+ecg_filter = butterworth_bandpass(order=2, low_hz=0.5, high_hz=40, fs_hz=250)
 ```
 
 Run the tests (they compile and run the generated C code):
@@ -237,7 +274,7 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 | [python/src/filter2c/verify.py](python/src/filter2c/verify.py) | Stability check, compile-and-compare against SciPy |
 | [python/src/filter2c/target.py](python/src/filter2c/target.py) | Writes the on-board self-test sketch and checks the board's printed output |
 | [python/src/filter2c/cli.py](python/src/filter2c/cli.py) | The `filter2c` command |
-| [python/tests/](python/tests/) | 111 tests, including a closed-form check and a check that a wrong coefficient is caught |
+| [python/tests/](python/tests/) | 159 tests, including a closed-form check and a check that a wrong coefficient is caught |
 | [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch that filters an analog input, and its generated header |
 | [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch |
 | [examples/HumNotch50Hz/](examples/HumNotch50Hz/) | Sketch that removes 50 Hz hum from an analog pin, and its generated header |
@@ -259,15 +296,16 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 - **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The PC tests use a C compiler (C99 and C++11, warnings as errors) and a small stand-in for the Arduino functions. The examples are also built with `arduino-cli`: checked locally for the ESP32-S3 (esp32 core 3.3.12), and the CI builds them for the ESP32-S3 and the Arduino UNO R4 WiFi.
 - **Float32 only.** The error grows when the cutoff is below roughly 1 % of the sampling rate (see the table above). Fixed-point and double precision output are not available yet.
-- **Two filter types.** Butterworth low-pass and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo), but its on-board self-test has only been run on the PC.
+- **Four filter types.** Butterworth low-pass, high-pass and band-pass, and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo). The high-pass and band-pass have only been run on the PC, including their board self-test sketch on the stand-in for the Arduino functions, and not on a board.
+- **ECG filters are tight in float32.** The 0.5 to 40 Hz band-pass passes at 250 Hz and 500 Hz sampling with little margin and fails at 1 kHz (see the table above). It has not been tested on real ECG data.
 - **The check covers one test signal.** It compares the output on a fixed signal (three sine waves and noise). It does not prove correctness for every possible input, and it does not check overflow behaviour or timing on the target.
 - **The compiler used for verification is the PC compiler.** A different compiler or a target without hardware float may give slightly different rounding.
 - **Not a certified tool.** This is a learning and portfolio project. For a safety-relevant product, the generated code must be verified on the target, inside your own process.
 
 ## Next steps
 
-1. Butterworth high-pass and band-pass (the usual 0.5 to 40 Hz ECG band), notches at the mains harmonics (100 and 150 Hz), which the hum demo shows are left over, and a notch that stays centred when the mains frequency drifts.
-2. Double precision output, and Q15/Q31 fixed-point output with an overflow check.
+1. Double precision output, which the ECG band-pass needs at higher sampling rates, with a speed measurement on the ESP32-S3. Then Q15/Q31 fixed-point output with an overflow check.
+2. Notches at the mains harmonics (100 and 150 Hz), which the hum demo shows are left over, and a notch that stays centred when the mains frequency drifts.
 3. Run the self-test on a classic ESP32 and an UNO R4, and run the `Butterworth40Hz` analog example with a real signal.
 4. Check the worst-case error over many test signals, not just one.
 5. Chebyshev and Bessel designs, then FIR filters.
