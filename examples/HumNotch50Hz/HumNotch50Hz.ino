@@ -22,7 +22,11 @@
 #include "filter2c.h"
 #include "notch50.h"
 
-const int ADC_PIN = 1;                        // GPIO1 on ESP32-S3 boards, change for your board
+#if defined(ARDUINO_ARCH_ESP32)
+const int ADC_PIN = 1;   // GPIO1 on ESP32-S3 boards, change for your board
+#else
+const int ADC_PIN = A0;  // first analog pin, for example on an Arduino UNO R4
+#endif
 const unsigned long SAMPLE_PERIOD_US = 1000;  // 1000 Hz, must match --fs
 
 static unsigned long nextSampleUs;
@@ -54,5 +58,10 @@ void loop()
     }
     average += 0.001f * (raw - average);
 
-    Serial.printf("raw:%.1f,notch:%.1f\n", (double)(raw - average), (double)(clean - average));
+    // Serial.print works on every Arduino board. The "name:value" format is what the
+    // Serial Plotter needs to label the two lines.
+    Serial.print("raw:");
+    Serial.print(raw - average, 1);
+    Serial.print(",notch:");
+    Serial.println(clean - average, 1);
 }

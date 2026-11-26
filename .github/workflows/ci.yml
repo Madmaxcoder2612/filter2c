@@ -28,3 +28,48 @@ jobs:
         run: filter2c notch --freq 50 --q 30 --fs 1000 --name notch50 -o /tmp/notch50.h --verify
       - name: Notch example header is up to date
         run: diff /tmp/notch50.h examples/HumNotch50Hz/notch50.h
+
+  # Builds the examples with the real Arduino toolchain (arduino-cli), for two boards.
+  arduino-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: ESP32-S3
+            fqbn: esp32:esp32:esp32s3
+            platforms: |
+              - name: esp32:esp32
+                source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+                version: 3.3.12
+            sketches: |
+              - examples/ESP32SelfTest
+              - examples/HumNotch50Hz
+              - examples/Butterworth40Hz
+          - board: UNO R4 WiFi
+            fqbn: arduino:renesas_uno:unor4wifi
+            platforms: |
+              - name: arduino:renesas_uno
+            sketches: |
+              - examples/HumNotch50Hz
+              - examples/Butterworth40Hz
+    name: Arduino build (${{ matrix.board }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          platforms: ${{ matrix.platforms }}
+          sketch-paths: ${{ matrix.sketches }}
+          libraries: |
+            - source-path: ./
+          enable-deltas-report: false
+
+  # Checks library.properties and the library layout against the Arduino rules.
+  arduino-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/arduino-lint-action@v2
+        with:
+          library-manager: submit

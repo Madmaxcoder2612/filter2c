@@ -9,7 +9,7 @@ Design a digital filter in Python with SciPy, and get C code that runs the same 
 
 The code generation is the easy part. The point of this project is the **check**: the generated code is compiled, run on a test signal and compared with SciPy, and the tool tells you when 32-bit float is not precise enough for your filter.
 
-> **Early alpha, tried on one board.** The checks run on a PC, and the self-test has passed on one ESP32-S3. The hum-removal example has also run on that board, but the `Butterworth40Hz` analog example has not, and nothing has been compiled with the Arduino toolchain in CI. Do not use the output in a safety-relevant system without your own verification. See [Limitations](#limitations).
+> **Early alpha, tried on one board.** The checks run on a PC, and the self-test has passed on one ESP32-S3. The hum-removal example has also run on that board, but the `Butterworth40Hz` analog example has not, The examples build with the Arduino toolchain (`arduino-cli`) for the ESP32-S3. The UNO R4 WiFi build is new in CI and has not been run on a board. Do not use the output in a safety-relevant system without your own verification. See [Limitations](#limitations).
 
 ## Contents
 
@@ -257,7 +257,7 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 ## Limitations
 
-- **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The CI runs the runtime only with a PC C compiler (C99 and C++11, warnings as errors), not the Arduino toolchain.
+- **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The PC tests use a C compiler (C99 and C++11, warnings as errors) and a small stand-in for the Arduino functions. The examples are also built with `arduino-cli`: checked locally for the ESP32-S3 (esp32 core 3.3.12), and the CI builds them for the ESP32-S3 and the Arduino UNO R4 WiFi.
 - **Float32 only.** The error grows when the cutoff is below roughly 1 % of the sampling rate (see the table above). Fixed-point and double precision output are not available yet.
 - **Two filter types.** Butterworth low-pass and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo), but its on-board self-test has only been run on the PC.
 - **The check covers one test signal.** It compares the output on a fixed signal (three sine waves and noise). It does not prove correctness for every possible input, and it does not check overflow behaviour or timing on the target.
@@ -268,7 +268,7 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 1. Butterworth high-pass and band-pass (the usual 0.5 to 40 Hz ECG band), notches at the mains harmonics (100 and 150 Hz), which the hum demo shows are left over, and a notch that stays centred when the mains frequency drifts.
 2. Double precision output, and Q15/Q31 fixed-point output with an overflow check.
-3. Compile the examples in CI with the Arduino toolchain, run the self-test on a classic ESP32 and an UNO R4, and run the analog example with a real signal.
+3. Run the self-test on a classic ESP32 and an UNO R4, and run the `Butterworth40Hz` analog example with a real signal.
 4. Check the worst-case error over many test signals, not just one.
 5. Chebyshev and Bessel designs, then FIR filters.
 

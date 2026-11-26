@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
 
 ## Unreleased
 
+- CI builds the examples with `arduino-cli` for the ESP32-S3 and the Arduino UNO R4 WiFi, and checks the library with `arduino-lint`. The three examples were also compiled locally for the ESP32-S3.
+- `HumNotch50Hz` uses `Serial.print` and picks the analog pin by board, so it builds on boards without `Serial.printf`. Re-run on the ESP32-S3: same result.
+
 - Notch filter (`filter2c notch`, `filter2c.notch`) for removing a single frequency such as 50 Hz mains hum.
 - Verification for notch filters: attenuation of a pure tone at the notch frequency, measured on the compiled C code.
 - Screen recording (GIF) of the live hum demo in the README.

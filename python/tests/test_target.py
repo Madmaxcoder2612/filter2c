@@ -38,6 +38,9 @@ struct SerialStub {
     void begin(unsigned long) {}
     explicit operator bool() const { return true; }
     void println(const char *s) { puts(s); }
+    void print(const char *s) { fputs(s, stdout); }
+    void print(double v, int digits) { ::printf("%.*f", digits, v); }
+    void println(double v, int digits) { ::printf("%.*f\\n", digits, v); }
     int printf(const char *format, ...) __attribute__((format(printf, 2, 3)))
     {
         va_list args;
@@ -59,6 +62,7 @@ static inline void delay(unsigned long) {}
 static inline unsigned long millis() { return 0; }
 static inline unsigned long micros() { return 0; }
 static inline int analogRead(int) { return 2048; }
+#define A0 14
 """
 
 
