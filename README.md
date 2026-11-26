@@ -9,7 +9,7 @@ Design a digital filter in Python with SciPy, and get C code that runs the same 
 
 The code generation is the easy part. The point of this project is the **check**: the generated code is compiled, run on a test signal and compared with SciPy, and the tool tells you when 32-bit float is not precise enough for your filter.
 
-> **Early alpha, tried on one board.** The checks run on a PC, and the self-test has passed on one ESP32-S3. The hum-removal example has also run on that board, but the `Butterworth40Hz` analog example has not, The examples build with the Arduino toolchain (`arduino-cli`) for the ESP32-S3. The UNO R4 WiFi build is new in CI and has not been run on a board. Do not use the output in a safety-relevant system without your own verification. See [Limitations](#limitations).
+> **Early alpha, tried on one board.** The checks run on a PC, and every filter type has passed a self-test on one ESP32-S3. A live check with the board's own analog input and the hum-removal example have run on that board too. All examples build with the Arduino toolchain (`arduino-cli`) for the ESP32-S3, and the two portable ones (`Butterworth40Hz`, `HumNotch50Hz`) also for the UNO R4 WiFi, but nothing has been run on a UNO R4. Do not use the output in a safety-relevant system without your own verification. See [Limitations](#limitations).
 
 ## Contents
 
@@ -18,6 +18,7 @@ The code generation is the easy part. The point of this project is the **check**
 - [Quick start](#quick-start)
 - [Using it on a microcontroller](#using-it-on-a-microcontroller)
 - [Testing on a real board](#testing-on-a-real-board)
+- [Live check with the board's analog input](#live-check-with-the-boards-analog-input)
 - [Live demo: removing 50 Hz mains hum](#live-demo-removing-50-hz-mains-hum)
 - [What is in the repository](#what-is-in-the-repository)
 - [Limitations](#limitations)
@@ -186,7 +187,7 @@ float y = filter2c_process(&lp40, x);     // once per sample, at exactly 1000 Hz
 
 The sampling rate in the code must match `--fs`. If your loop runs at a different rate, the filter has a different cutoff.
 
-**Arduino:** the repository is laid out as an Arduino library (`library.properties` and `src/`). Copy `src/filter2c.h` into your sketch folder or install the folder as a library, then put your generated header next to your sketch. The example [Butterworth40Hz](examples/Butterworth40Hz/Butterworth40Hz.ino) reads pin A0 at 1000 Hz and prints the raw and filtered value for the Serial Plotter. The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) needs no extra parts: a bare jumper wire on an analog pin acts as an antenna and picks up mains hum, and the notch filter removes it from the plot. How much hum you see depends on your surroundings. It has run on an ESP32-S3, see the [live demo](#live-demo-removing-50-hz-mains-hum).
+**Arduino:** the repository is laid out as an Arduino library (`library.properties` and `src/`). Copy `src/filter2c.h` into your sketch folder or install the folder as a library, then put your generated header next to your sketch. The example [Butterworth40Hz](examples/Butterworth40Hz/Butterworth40Hz.ino) reads pin A0 at 1000 Hz and prints the raw and filtered value for the Serial Plotter (921600 baud). It has run on an ESP32-S3, see the [live check](#live-check-with-the-boards-analog-input). The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) needs no extra parts: a bare jumper wire on an analog pin acts as an antenna and picks up mains hum, and the notch filter removes it from the plot. How much hum you see depends on your surroundings. It has run on an ESP32-S3, see the [live demo](#live-demo-removing-50-hz-mains-hum).
 
 **Anything else with a C or C++ compiler** (ESP-IDF, STM32, Zephyr, bare metal): add the two headers to your project. There are no dependencies and no dynamic memory.
 
@@ -245,6 +246,40 @@ The sketch is also tested on the PC against a small stand-in for the Arduino fun
 
 All four passed. The two filters with a cutoff close to zero frequency (high-pass and ECG band-pass) are the ones that come closest to the limit, about 50 % and 70 % of it, which matches the float32 behaviour described above. The times cover the filter only, after a warm-up pass, and exclude reading an ADC or printing.
 
+## Live check with the board's analog input
+
+The self-test above feeds the filter a stored signal. The **live check** uses the board's own analog-to-digital converter (ADC) instead, so it covers the whole path: real analog input, real timing, real filter. It needs no extra parts, only **one jumper wire**: the board drives one of its pins as a slow 5 Hz square wave, and you connect that pin to the analog input.
+
+1. Generate the sketch (this one is already in [examples/LiveCheck40Hz](examples/LiveCheck40Hz/)):
+
+   ```bash
+   filter2c target-sketch butter-lowpass --order 4 --cutoff 40 --fs 1000 --name lp40 --live -o LiveCheck40Hz
+   ```
+
+2. Connect GPIO2 to GPIO1 with a jumper wire (change the two pin numbers at the top of the sketch for other boards), upload, and open the Serial Monitor at 921600 baud.
+3. Wait for `FILTER2C_LIVE_END`, copy all of the text into `live.txt`, and run:
+
+   ```bash
+   filter2c check-live-log LiveCheck40Hz live.txt
+   ```
+
+The board takes 2000 readings at exactly 1000 Hz and keeps them in memory, and prints them only afterwards, so the printing cannot disturb the timing. The command then checks three things: the real sample rate, that the input really changed, and that the filter output equals SciPy's filter applied to the same raw readings. The real run on an ESP32-S3 ([log](results/esp32-s3-live-log.txt)):
+
+```text
+Live readings: 2000
+Timing: mean sample period 1000.0 us (expected 1000.0), shortest 999, longest 1001, spread (std) 0.7 us, 0.0 % of intervals late: PASS
+Input activity: raw reading from 0 to 4095 counts (swing 4095): PASS
+Filter output against SciPy applied to the same raw readings: PASS (max error 1.21e-02 = 2.66e-06 of the peak, tolerance 1e-04)
+```
+
+<p align="center">
+  <img src="docs/images/live-check-40hz.png" alt="Two charts from the real run. Top: a 5 Hz square wave read by the ADC (blue) and the filtered output (orange). Bottom: one rising edge in detail, where the board's output and SciPy's prediction lie on top of each other" width="900" />
+  <br/>
+  <em>Drawn from the real log by <a href="tools/plot_live_log.py">tools/plot_live_log.py</a>. The 10 to 90 % rise time is 9.8 ms on the board and in SciPy, and both overshoot by 11.0 %, which is normal for a 4th-order Butterworth filter and not an error.</em>
+</p>
+
+**Hand test with the Serial Plotter.** The `Butterworth40Hz` example was also run on the board with the Serial Plotter, holding one end of a jumper wire on the analog pin (the other end in the air, on 3V3, or on GND). With the wire in the air, the pin picks up so much 50 Hz mains hum that the ADC clips between 0 and 4095 and the raw line looks like a square wave. The filtered line is a smooth wave about 981 counts high around 2059, where the filter's gain at 50 Hz predicts 981 around 2048. On 3V3 and on GND both lines go flat, at 4095 and at 0. The Plotter rescales its axis, so the two flat lines look alike, and only the numbers on the axis differ. The numbers come from reading one frame of a screen recording, so they are approximate, to about 10 counts.
+
 ## Live demo: removing 50 Hz mains hum
 
 The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) filters a bare jumper wire plugged into an analog pin of an ESP32-S3, sampled at 1000 Hz. The wire works like an antenna and picks up the hum from nearby mains wiring. No other parts are needed.
@@ -285,8 +320,11 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 | [python/src/filter2c/verify.py](python/src/filter2c/verify.py) | Stability check, compile-and-compare against SciPy |
 | [python/src/filter2c/target.py](python/src/filter2c/target.py) | Writes the on-board self-test sketch and checks the board's printed output |
 | [python/src/filter2c/cli.py](python/src/filter2c/cli.py) | The `filter2c` command |
-| [python/tests/](python/tests/) | 165 tests, including a closed-form check and a check that a wrong coefficient is caught |
+| [python/tests/](python/tests/) | 196 tests, including a closed-form check and a check that a wrong coefficient is caught |
 | [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch that filters an analog input, and its generated header |
+| [examples/LiveCheck40Hz/](examples/LiveCheck40Hz/) | Live check with the board's analog input and one jumper wire |
+| [python/src/filter2c/live.py](python/src/filter2c/live.py) | Writes the live-check sketch and checks its output |
+| [tools/plot_live_log.py](tools/plot_live_log.py) | Draws the README figure from a real live log (needs matplotlib) |
 | [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch (low-pass) |
 | [examples/ESP32SelfTestHighpass/](examples/ESP32SelfTestHighpass/), [ESP32SelfTestEcg](examples/ESP32SelfTestEcg/), [ESP32SelfTestNotch](examples/ESP32SelfTestNotch/) | The same self-test for the high-pass, the ECG band-pass and the notch |
 | [examples/HumNotch50Hz/](examples/HumNotch50Hz/) | Sketch that removes 50 Hz hum from an analog pin, and its generated header |
@@ -306,7 +344,7 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 ## Limitations
 
-- **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The PC tests use a C compiler (C99 and C++11, warnings as errors) and a small stand-in for the Arduino functions. The examples are also built with `arduino-cli`: checked locally for the ESP32-S3 (esp32 core 3.3.12), and the CI builds them for the ESP32-S3 and the Arduino UNO R4 WiFi.
+- **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried. Besides the self-tests, the [live check](#live-check-with-the-boards-analog-input) and the hum demo have run on it. The PC tests use a C compiler (C99 and C++11, warnings as errors) and a small stand-in for the Arduino functions. The examples are also built with `arduino-cli`: checked locally for the ESP32-S3 (esp32 core 3.3.12), and the CI builds them for the ESP32-S3 and the Arduino UNO R4 WiFi.
 - **Float32 only.** The error grows when the cutoff is below roughly 1 % of the sampling rate (see the table above). Fixed-point and double precision output are not available yet.
 - **Four filter types.** Butterworth low-pass, high-pass and band-pass, and a single-section notch. The notch is checked with one pure tone at its centre frequency. It has been tried live on one ESP32-S3 (the hum demo). All four have passed the self-test on one ESP32-S3 (see the table in [Testing on a real board](#testing-on-a-real-board)).
 - **ECG filters are tight in float32.** The 0.5 to 40 Hz band-pass passes at 250 Hz and 500 Hz sampling with little margin and fails at 1 kHz (see the table above). On the board it used about 70 % of the error limit at 250 Hz. It has not been tested on real ECG data.
@@ -318,7 +356,7 @@ Fitting sine waves to the 47 samples in the screenshot gives these amplitudes, i
 
 1. Double precision output, which the ECG band-pass needs at higher sampling rates, with a speed measurement on the ESP32-S3. Then Q15/Q31 fixed-point output with an overflow check.
 2. Notches at the mains harmonics (100 and 150 Hz), which the hum demo shows are left over, and a notch that stays centred when the mains frequency drifts.
-3. Run the self-test on a classic ESP32 and an UNO R4, and run the `Butterworth40Hz` analog example with a real signal.
+3. Run the self-test and the live check on a classic ESP32 and an UNO R4.
 4. Check the worst-case error over many test signals, not just one.
 5. Chebyshev and Bessel designs, then FIR filters.
 

@@ -294,6 +294,10 @@ def check_board_log(
     if not meta_path.exists():
         raise VerificationError(f"{meta_path} not found: is this a folder made by target-sketch?")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if meta.get("mode") == "live":
+        raise VerificationError(
+            "this folder holds a live-check sketch. Use check-live-log for its output."
+        )
     design = _design_from_meta(meta)
     name, samples = meta["name"], int(meta["samples"])
 

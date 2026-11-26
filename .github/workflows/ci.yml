@@ -51,6 +51,7 @@ jobs:
               - examples/ESP32SelfTestNotch
               - examples/HumNotch50Hz
               - examples/Butterworth40Hz
+              - examples/LiveCheck40Hz
           - board: UNO R4 WiFi
             fqbn: arduino:renesas_uno:unor4wifi
             platforms: |
@@ -66,8 +67,8 @@ jobs:
           fqbn: ${{ matrix.fqbn }}
           platforms: ${{ matrix.platforms }}
           sketch-paths: ${{ matrix.sketches }}
-          libraries: |
-            - source-path: ./
+          # No library is installed on purpose: every example must compile on its own, the way
+          # it does for a user who just opens the sketch in the Arduino IDE.
           enable-deltas-report: false
 
   # Checks library.properties and the library layout against the Arduino rules.

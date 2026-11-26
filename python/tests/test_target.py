@@ -33,12 +33,18 @@ ARDUINO_STUB = """#pragma once
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <type_traits>
 
 struct SerialStub {
     void begin(unsigned long) {}
     explicit operator bool() const { return true; }
     void println(const char *s) { puts(s); }
     void print(const char *s) { fputs(s, stdout); }
+    void print(char c) { ::putchar(c); }
+    template <typename T>
+    typename std::enable_if<std::is_integral<T>::value>::type print(T v) { ::printf("%lld", (long long)v); }
+    template <typename T>
+    typename std::enable_if<std::is_integral<T>::value>::type println(T v) { ::printf("%lld", (long long)v); ::putchar(10); }
     void print(double v, int digits) { ::printf("%.*f", digits, v); }
     void println(double v, int digits) { ::printf("%.*f\\n", digits, v); }
     int printf(const char *format, ...) __attribute__((format(printf, 2, 3)))
@@ -59,9 +65,15 @@ static EspStub ESP __attribute__((unused));
 
 static inline unsigned int getCpuFrequencyMhz() { return 240; }
 static inline void delay(unsigned long) {}
-static inline unsigned long millis() { return 0; }
-static inline unsigned long micros() { return 0; }
-static inline int analogRead(int) { return 2048; }
+static unsigned long g_stub_us = 0;
+static inline unsigned long micros() { g_stub_us += 250; return g_stub_us; }
+static inline unsigned long millis() { return g_stub_us / 1000; }
+static inline int analogRead(int) { static int calls = 0; return ((calls++ / 50) % 2) ? 3900 : 120; }
+static inline void pinMode(int, int) {}
+static inline void digitalWrite(int, int) {}
+#define OUTPUT 1
+#define HIGH 1
+#define LOW 0
 #define A0 14
 """
 

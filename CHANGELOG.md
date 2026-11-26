@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
 
 ## Unreleased
 
+- Live check with the board's own analog input: `filter2c target-sketch ... --live` and `filter2c check-live-log`, example `LiveCheck40Hz`. First real run on an ESP32-S3 (GPIO2 wired to GPIO1): sample period 1000.0 us with 0.7 us spread, and the filter output equals SciPy on the real readings (2.66e-06 of the peak). Figure drawn from the log by `tools/plot_live_log.py`.
+- Fix: `Butterworth40Hz` was missing its own copy of `filter2c.h` and only compiled with the library installed. Every example now carries the header, a test checks it, and the CI builds the examples without the library installed. The example now prints at 921600 baud, because 115200 baud cannot carry 1000 lines per second.
+
 - Real ESP32-S3 results for all four filter types (low-pass, high-pass, ECG band-pass, notch), with the logs in `results/` and tests that check them. Sketches `ESP32SelfTestHighpass`, `ESP32SelfTestEcg` and `ESP32SelfTestNotch`.
 
 - Butterworth high-pass and band-pass (`filter2c butter-highpass`, `filter2c butter-bandpass`, `filter2c.butterworth_highpass`, `filter2c.butterworth_bandpass`), also for `target-sketch`. Checked against SciPy's frequency response and, for the high-pass, against the closed-form gain. The 0.5 to 40 Hz ECG band passes in float32 at 250 and 500 Hz sampling and fails at 1 kHz, which the tool reports.

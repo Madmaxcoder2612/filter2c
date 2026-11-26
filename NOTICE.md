@@ -19,6 +19,10 @@ Other projects exist that run filters on microcontrollers or generate filter cod
 | SciPy | BSD-3-Clause | Filter design and the reference filter |
 | pytest (tests only) | MIT | Test runner |
 
+## Tools used only to draw figures
+
+`tools/plot_live_log.py` uses matplotlib (matplotlib licence, a permissive BSD-style licence) to draw `docs/images/live-check-40hz.png` from the author's own measurement. It is not a dependency of the package. The figure uses the DejaVu Sans font that ships with matplotlib (a free licence that allows use and embedding).
+
 ## Trademarks
 
 Arduino, ESP32, Espressif, MATLAB and other product names are trademarks of their owners. They appear in this repository only to say which hardware or software something works with. This project is not affiliated with or endorsed by them.

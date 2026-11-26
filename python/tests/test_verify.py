@@ -142,3 +142,16 @@ def test_example_header_is_up_to_date():
     expected = generate_header(butterworth_lowpass(4, 40, 1000), "lp40")
     on_disk = (ROOT / "examples" / "Butterworth40Hz" / "lp40.h").read_text(encoding="utf-8")
     assert on_disk.replace("\r\n", "\n") == expected
+
+
+def test_every_example_is_self_contained():
+    """Each example folder must carry its own copy of filter2c.h, identical to src/filter2c.h.
+
+    Without it the sketch only compiles when the library is installed, and a user who just
+    opens the sketch in the Arduino IDE gets "filter2c.h: No such file or directory".
+    """
+    runtime = (ROOT / "src" / "filter2c.h").read_bytes()
+    folders = [p for p in sorted((ROOT / "examples").iterdir()) if p.is_dir()]
+    assert folders
+    for folder in folders:
+        assert (folder / "filter2c.h").read_bytes() == runtime, folder.name

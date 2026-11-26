@@ -6,6 +6,7 @@ filter2c butter-bandpass ...       write C code for a Butterworth band-pass filt
 filter2c notch ...                 write C code for a notch filter
 filter2c target-sketch <filter>    write an ESP32 self-test sketch
 filter2c check-board-log ...       check what the board printed
+filter2c check-live-log ...        check a live run with the board's analog input
 """
 from __future__ import annotations
 
@@ -21,6 +22,12 @@ from .design import (
     butterworth_highpass,
     butterworth_lowpass,
     notch,
+)
+from .live import (
+    DEFAULT_MAX_PERIOD_ERROR,
+    DEFAULT_MIN_SWING,
+    check_live_log,
+    create_live_sketch,
 )
 from .target import check_board_log, create_sketch
 from .verify import (
@@ -142,6 +149,11 @@ def build_parser() -> argparse.ArgumentParser:
             "-o", "--output", type=Path, required=True,
             help="sketch folder to create (its name becomes the sketch name)",
         )
+        p.add_argument(
+            "--live", action="store_true",
+            help="write a live-check sketch that uses the board's analog input, with one "
+                 "jumper wire between two pins, instead of the stored-signal self-test",
+        )
 
     log = sub.add_parser(
         "check-board-log",
@@ -150,6 +162,24 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("sketch", type=Path, help="the sketch folder made by target-sketch")
     log.add_argument("log", type=Path, help="text file with the copied serial output")
     _add_tolerance_argument(log)
+
+    live = sub.add_parser(
+        "check-live-log",
+        help="check the output of a live-check sketch: sampling rate, input activity, filter",
+    )
+    live.add_argument("sketch", type=Path, help="the live-check sketch folder")
+    live.add_argument("log", type=Path, help="text file with the copied serial output")
+    _add_tolerance_argument(live)
+    live.add_argument(
+        "--max-period-error", type=float, default=DEFAULT_MAX_PERIOD_ERROR,
+        help="allowed error of the mean sample period, as a fraction "
+             f"(default: {DEFAULT_MAX_PERIOD_ERROR:g})",
+    )
+    live.add_argument(
+        "--min-swing", type=float, default=DEFAULT_MIN_SWING,
+        help="the raw reading must change by at least this many counts "
+             f"(default: {DEFAULT_MIN_SWING:g})",
+    )
     return parser
 
 
@@ -218,6 +248,18 @@ def _run_generate(args: argparse.Namespace) -> int:
 
 def _run_target_sketch(args: argparse.Namespace) -> int:
     design = _design_from_args(args)
+    if args.live:
+        files = create_live_sketch(design, args.name, args.output)
+        print(f"Wrote live-check sketch folder {args.output} ({design.describe()}):")
+        for path in files:
+            print(f"  {path.name}")
+        print(
+            "Next: connect pin 2 and the analog pin (GPIO2 and GPIO1 on ESP32-S3) with one jumper "
+            f"wire, open {args.output / (args.output.name + '.ino')} in the Arduino IDE, upload, "
+            "open the Serial Monitor at 921600 baud, copy all of its text into a file and run: "
+            f"filter2c check-live-log {args.output} <that file>"
+        )
+        return 0
     files = create_sketch(design, args.name, args.output)
     print(f"Wrote sketch folder {args.output} ({design.describe()}):")
     for path in files:
@@ -259,6 +301,42 @@ def _run_check_board_log(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_check_live_log(args: argparse.Namespace) -> int:
+    report = check_live_log(
+        args.sketch, args.log.read_text(encoding="utf-8", errors="replace"),
+        args.tolerance, args.max_period_error, args.min_swing,
+    )
+
+    def word(ok: bool) -> str:
+        return "PASS" if ok else "FAIL"
+
+    print(f"Live readings: {report.samples}")
+    print(
+        f"Timing: mean sample period {report.mean_period_us:.1f} us (expected "
+        f"{report.expected_period_us:.1f}), shortest {report.min_period_us:.0f}, longest "
+        f"{report.max_period_us:.0f}, spread (std) {report.std_period_us:.1f} us, "
+        f"{report.late_fraction * 100:.1f} % of intervals late: {word(report.timing_ok)}"
+    )
+    print(
+        f"Input activity: raw reading from {report.raw_min:.0f} to {report.raw_max:.0f} counts "
+        f"(swing {report.raw_max - report.raw_min:.0f}): {word(report.signal_ok)}"
+    )
+    print(
+        "Filter output against SciPy applied to the same raw readings: "
+        f"{word(report.accuracy_ok)} (max error {report.max_abs_error:.2e} = "
+        f"{report.relative_error:.2e} of the peak, tolerance {report.tolerance:.0e})"
+    )
+    if not report.signal_ok:
+        print("hint: the input barely changed. Check the jumper wire between the two pins.",
+              file=sys.stderr)
+    if not report.timing_ok:
+        print("hint: the board did not sample at the expected rate. Is the loop too slow "
+              "for this sampling rate?", file=sys.stderr)
+    if not report.accuracy_ok:
+        print(_FLOAT_HINT, file=sys.stderr)
+    return 0 if report.passed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -266,6 +344,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_generate(args)
         if args.command == "target-sketch":
             return _run_target_sketch(args)
+        if args.command == "check-live-log":
+            return _run_check_live_log(args)
         return _run_check_board_log(args)
     except (ValueError, VerificationError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)

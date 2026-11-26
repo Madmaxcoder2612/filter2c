@@ -6,7 +6,10 @@
  *     filter2c butter-lowpass --order 4 --cutoff 40 --fs 1000 --name lp40 -o lp40.h
  *
  * Wiring: a sensor or signal source on analog pin A0.
- * Open the Serial Plotter at 115200 baud to see the raw and filtered signal.
+ * Open the Serial Plotter at 921600 baud (the speed is ignored on a native USB
+ * port) to see the raw and the filtered signal. A lower baud rate cannot carry
+ * 1000 lines per second, the loop would fall behind and the filter would no
+ * longer run at 1000 Hz.
  */
 #include "lp40.h"
 
@@ -16,7 +19,7 @@ unsigned long nextSampleUs;
 
 void setup()
 {
-    Serial.begin(115200);
+    Serial.begin(921600);
     filter2c_reset(&lp40);
     nextSampleUs = micros();
 }
@@ -32,7 +35,9 @@ void loop()
     float raw = (float)analogRead(A0);
     float smooth = filter2c_process(&lp40, raw);
 
-    Serial.print(raw);
-    Serial.print(' ');
-    Serial.println(smooth);
+    // "name:value" pairs make the Serial Plotter label the two lines.
+    Serial.print("raw:");
+    Serial.print((int)raw);
+    Serial.print(",smooth:");
+    Serial.println(smooth, 1);
 }

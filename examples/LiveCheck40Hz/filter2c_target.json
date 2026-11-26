@@ -1,0 +1,10 @@
+{
+  "filter": "butterworth-lowpass",
+  "order": 4,
+  "cutoff_hz": 40.0,
+  "fs_hz": 1000.0,
+  "name": "lp40",
+  "samples": 2000,
+  "mode": "live",
+  "filter2c_version": "0.1.0"
+}
