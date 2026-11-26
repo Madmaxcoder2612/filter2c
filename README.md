@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Madmaxcoder2612/filter2c/actions/workflows/ci.yml/badge.svg)](https://github.com/Madmaxcoder2612/filter2c/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/filter2c)](https://pypi.org/project/filter2c/)
+[![Arduino Library Manager](https://img.shields.io/badge/Arduino%20Library%20Manager-filter2c-00979D)](#using-it-on-a-microcontroller)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Status: early alpha](https://img.shields.io/badge/status-early%20alpha-orange)](#limitations)
@@ -194,7 +195,7 @@ float y = filter2c_process(&lp40, x);     // once per sample, at exactly 1000 Hz
 
 The sampling rate in the code must match `--fs`. If your loop runs at a different rate, the filter has a different cutoff.
 
-**Arduino:** the repository is laid out as an Arduino library (`library.properties` and `src/`). Copy `src/filter2c.h` into your sketch folder or install the folder as a library, then put your generated header next to your sketch. The example [Butterworth40Hz](examples/Butterworth40Hz/Butterworth40Hz.ino) reads pin A0 at 1000 Hz and prints the raw and filtered value for the Serial Plotter (921600 baud). It has run on an ESP32-S3, see the [live check](#live-check-with-the-boards-analog-input). The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) needs no extra parts: a bare jumper wire on an analog pin acts as an antenna and picks up mains hum, and the notch filter removes it from the plot. How much hum you see depends on your surroundings. It has run on an ESP32-S3, see the [live demo](#live-demo-removing-50-hz-mains-hum).
+**Arduino:** install it from the Library Manager: in the Arduino IDE open Sketch > Include Library > Manage Libraries, search for `filter2c` and click Install. With the command line: `arduino-cli lib install filter2c`. The seven examples then appear under File > Examples > filter2c. (Installing from the Library Manager and compiling `HumNotch50Hz` for the ESP32-S3 has been checked. Other boards are not tested, see [Limitations](#limitations).) Alternatively copy `src/filter2c.h` into your sketch folder. Then put your generated header next to your sketch. The example [Butterworth40Hz](examples/Butterworth40Hz/Butterworth40Hz.ino) reads pin A0 at 1000 Hz and prints the raw and filtered value for the Serial Plotter (921600 baud). It has run on an ESP32-S3, see the [live check](#live-check-with-the-boards-analog-input). The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) needs no extra parts: a bare jumper wire on an analog pin acts as an antenna and picks up mains hum, and the notch filter removes it from the plot. How much hum you see depends on your surroundings. It has run on an ESP32-S3, see the [live demo](#live-demo-removing-50-hz-mains-hum).
 
 **Anything else with a C or C++ compiler** (ESP-IDF, STM32, Zephyr, bare metal): add the two headers to your project. There are no dependencies and no dynamic memory.
 
