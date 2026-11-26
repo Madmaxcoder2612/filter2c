@@ -159,7 +159,7 @@ If nothing appears on an ESP32-S3 connected through its USB port, set **Tools > 
 
 The sketch is also tested on the PC against a small stand-in for the Arduino functions, so its logic and its output format are checked in CI.
 
-**First real result.** A Waveshare ESP32-S3 board with an ESP32-S3-WROOM-1-N8R8 module, as reported by the author, ran the example filter. [The log](results/esp32-s3-board-log.txt) is kept in the repository and a test checks it on every push. The board matched SciPy to 2.8e-06 of the output peak, and one sample took about 43 clock cycles at 240 MHz. The timing covers the filter only, measured on the second pass over the test signal, after the caches are warm. It does not include reading an ADC or printing. The Arduino core version and IDE settings were not recorded for this run.
+**First real result.** A Waveshare ESP32-S3 board with an ESP32-S3-WROOM-1-N8R8 module, as reported by the author, ran the example filter. [The log](results/esp32-s3-board-log.txt) is kept in the repository and a test checks it on every push. The board matched SciPy to 2.8e-06 of the output peak, and one sample took about 43 clock cycles at 240 MHz. The timing covers the filter only, measured on the second pass over the test signal, after the caches are warm. It does not include reading an ADC or printing. Toolchain: Arduino IDE 2.3.11, board "ESP32S3 Dev Module", `esp32` board package (Arduino core) 3.3.12. Other Tools-menu settings (USB CDC, PSRAM, flash size) were not recorded.
 
 ## What is in the repository
 
