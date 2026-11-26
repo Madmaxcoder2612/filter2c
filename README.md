@@ -202,6 +202,14 @@ The sketch is also tested on the PC against a small stand-in for the Arduino fun
 The example [HumNotch50Hz](examples/HumNotch50Hz/HumNotch50Hz.ino) filters a bare jumper wire plugged into an analog pin of an ESP32-S3, sampled at 1000 Hz. The wire works like an antenna and picks up the hum from nearby mains wiring. No other parts are needed.
 
 <p align="center">
+  <img src="docs/images/hum-notch-demo.gif" alt="Screen recording of the Arduino Serial Plotter: a large 50 Hz wave in blue and, after the notch filter, a much smaller wave in orange" width="900" />
+  <br/>
+  <em>Screen recording of the live run, 4.5 seconds. Blue: the signal as the pin reads it. Orange: the same signal after the 50 Hz notch filter.</em>
+</p>
+
+A still frame from another moment of the same run, with the numbers worked out from it:
+
+<p align="center">
   <img src="docs/images/hum-notch-plot.png" alt="Arduino Serial Plotter: a large 50 Hz wave (blue, raw) and the same signal after the notch filter (orange), where the 50 Hz wave is gone and a smaller 100 Hz wave remains" width="900" />
   <br/>
   <em>Arduino Serial Plotter, one sample per point. Blue: the signal as the pin reads it. Orange: the same signal after the 50 Hz notch filter. Both have their slow average removed.</em>
