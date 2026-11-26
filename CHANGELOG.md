@@ -2,6 +2,13 @@
 
 This project follows [Semantic Versioning](https://semver.org/). While the version is 0.x, the API may still change.
 
+## Unreleased
+
+- `filter2c target-sketch`: writes an ESP32 sketch that runs the filter on the board and prints the result and the time per sample.
+- `filter2c check-board-log`: compares the board's printed output with SciPy and with the PC build.
+- Example `ESP32SelfTest`.
+- First real hardware result: ESP32-S3 at 240 MHz matches SciPy to 2.8e-06 of the peak, 43 cycles per sample (`results/esp32-s3-board-log.txt`).
+
 ## 0.1.0 (unreleased)
 
 - Butterworth low-pass design (order 1 to 16) as second-order sections, using SciPy.

@@ -17,6 +17,7 @@ The code generation is the easy part. The point of this project is the **check**
 - [Results at a glance](#results-at-a-glance)
 - [Quick start](#quick-start)
 - [Using it on a microcontroller](#using-it-on-a-microcontroller)
+- [Testing on a real board](#testing-on-a-real-board)
 - [What is in the repository](#what-is-in-the-repository)
 - [Limitations](#limitations)
 - [Next steps](#next-steps)
@@ -46,6 +47,9 @@ The example filter is a **4th-order Butterworth low-pass, 40 Hz cutoff, 1000 Hz 
 | Largest pole radius after rounding to float | 0.909 (stable, must be below 1) |
 | Generated C against SciPy on 4096 test samples | largest error 4.3e-06 of the output peak (limit 1e-4) |
 | Other filters in the tests | Four more combinations (orders 1, 2, 3 and 6, sampling 100 Hz to 2 kHz): all pass |
+| **On a real ESP32-S3** (240 MHz), same test signal against SciPy | largest error 3.8e-06 = 2.8e-06 of the peak: PASS ([log](results/esp32-s3-board-log.txt)) |
+| ESP32-S3 against the PC-compiled C code | not bit-identical: largest difference 3.3e-06 (the two compilers round differently) |
+| Time per sample on the ESP32-S3 | about 43 cycles = 0.18 µs, which is 0.02 % of one CPU core at 1 kHz sampling |
 | Gain of the compiled C code at 10, 40, 80 and 150 Hz | 0.9996, 0.7057, 0.0585, 0.0038 |
 | Closed-form Butterworth gain at the same frequencies | 1.0000, 0.7071, 0.0585, 0.0038 |
 
@@ -121,6 +125,42 @@ The sampling rate in the code must match `--fs`. If your loop runs at a differen
 
 **Anything else with a C or C++ compiler** (ESP-IDF, STM32, Zephyr, bare metal): add the two headers to your project. There are no dependencies and no dynamic memory.
 
+## Testing on a real board
+
+A PC compiler is not the compiler on your board. The self-test runs the filter on the board itself and checks what comes back. It needs only the board, a USB cable and the Arduino IDE, no extra parts.
+
+```mermaid
+flowchart LR
+    T["filter2c target-sketch"] --> U["Upload to the ESP32"]
+    U --> B["Board filters a built-in test signal<br/>and prints the result"]
+    B --> L["Copy the Serial Monitor text<br/>into board.txt"]
+    L --> K["filter2c check-board-log"]
+    K --> V["Compared with SciPy<br/>and with the PC build"]
+```
+
+1. Create the sketch folder (this one is already in [examples/ESP32SelfTest](examples/ESP32SelfTest/)):
+
+   ```bash
+   filter2c target-sketch --order 4 --cutoff 40 --fs 1000 --name lp40 -o ESP32SelfTest
+   ```
+
+2. Open `ESP32SelfTest/ESP32SelfTest.ino` in the Arduino IDE, select your ESP32 board and upload.
+3. Open the Serial Monitor at 115200 baud and wait until `FILTER2C_END` and three `FILTER2C_` lines appear. The block repeats every 10 seconds.
+4. Select all the text, copy it and save it as `board.txt`.
+5. Check it:
+
+   ```bash
+   filter2c check-board-log ESP32SelfTest board.txt
+   ```
+
+The command prints three things: whether the board's output matches SciPy, whether it matches the PC-compiled C code exactly (small differences are normal, because compilers round differently), and how many clock cycles and microseconds one sample takes.
+
+If nothing appears on an ESP32-S3 connected through its USB port, set **Tools > USB CDC On Boot > Enabled** in the Arduino IDE and upload again.
+
+The sketch is also tested on the PC against a small stand-in for the Arduino functions, so its logic and its output format are checked in CI.
+
+**First real result.** A Waveshare ESP32-S3 board with an ESP32-S3-WROOM-1-N8R8 module, as reported by the author, ran the example filter. [The log](results/esp32-s3-board-log.txt) is kept in the repository and a test checks it on every push. The board matched SciPy to 2.8e-06 of the output peak, and one sample took about 43 clock cycles at 240 MHz. The timing covers the filter only, measured on the second pass over the test signal, after the caches are warm. It does not include reading an ADC or printing. The Arduino core version and IDE settings were not recorded for this run.
+
 ## What is in the repository
 
 | File | Role |
@@ -129,9 +169,12 @@ The sampling rate in the code must match `--fs`. If your loop runs at a differen
 | [python/src/filter2c/design.py](python/src/filter2c/design.py) | Filter design with input checks |
 | [python/src/filter2c/codegen.py](python/src/filter2c/codegen.py) | Writes the C header, float32-exact |
 | [python/src/filter2c/verify.py](python/src/filter2c/verify.py) | Stability check, compile-and-compare against SciPy |
+| [python/src/filter2c/target.py](python/src/filter2c/target.py) | Writes the on-board self-test sketch and checks the board's printed output |
 | [python/src/filter2c/cli.py](python/src/filter2c/cli.py) | The `filter2c` command |
-| [python/tests/](python/tests/) | 56 tests, including a closed-form check and a check that a wrong coefficient is caught |
-| [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch and its generated header |
+| [python/tests/](python/tests/) | 78 tests, including a closed-form check and a check that a wrong coefficient is caught |
+| [examples/Butterworth40Hz/](examples/Butterworth40Hz/) | Arduino sketch that filters an analog input, and its generated header |
+| [examples/ESP32SelfTest/](examples/ESP32SelfTest/) | Ready-to-upload ESP32 self-test sketch |
+| [results/](results/) | The real serial log from the ESP32-S3 run |
 | [NOTICE.md](NOTICE.md) | Prior art, licences, trademarks |
 
 ```text
@@ -147,7 +190,7 @@ The sampling rate in the code must match `--fs`. If your loop runs at a differen
 
 ## Limitations
 
-- **Not tried on real hardware.** The Arduino example has not been compiled with the Arduino toolchain or run on a board. The runtime is checked with a PC C compiler (C99 and C++11, warnings as errors).
+- **One board tested.** The self-test has passed on one ESP32-S3 (see [Testing on a real board](#testing-on-a-real-board)). Other boards, such as the classic ESP32 or the Arduino UNO R4, have not been tried, and the `Butterworth40Hz` example that reads an analog pin has not been run on hardware. The CI runs the runtime only with a PC C compiler (C99 and C++11, warnings as errors), not the Arduino toolchain.
 - **Float32 only.** The error grows when the cutoff is below roughly 1 % of the sampling rate (see the table above). Fixed-point and double precision output are not available yet.
 - **One filter type.** Butterworth low-pass only.
 - **The check covers one test signal.** It compares the output on a fixed signal (three sine waves and noise). It does not prove correctness for every possible input, and it does not check overflow behaviour or timing on the target.
@@ -158,7 +201,7 @@ The sampling rate in the code must match `--fs`. If your loop runs at a differen
 
 1. 50 Hz notch filter and Butterworth high-pass and band-pass.
 2. Double precision output, and Q15/Q31 fixed-point output with an overflow check.
-3. Compile the Arduino example in CI with the Arduino toolchain and test on a real ESP32 and UNO R4.
+3. Compile the examples in CI with the Arduino toolchain, run the self-test on a classic ESP32 and an UNO R4, and run the analog example with a real signal.
 4. Check the worst-case error over many test signals, not just one.
 5. Chebyshev and Bessel designs, then FIR filters.
 
